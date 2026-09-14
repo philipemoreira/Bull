@@ -71,6 +71,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let todosOsItensDoCartaoBruto = []; // snapshot bruto, antes de categorizar — guardado pra poder recategorizar sem nova busca
     let cartaoEmEdicaoId = null;
     let pagamentoFaturaPendente = null; // { itensNaoPagos, totalFatura, cartaoId, textoFatura }
+    const cartoesComDetalheAberto = new Set(); // quais cartões estão com "ver itens da fatura aberta" expandido
     let bancoRealEmEdicaoId = null;
 
     // ==========================================================================
@@ -611,6 +612,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return {
             itensFechadosNaoPagos,
             itensFechadosPagos,
+            itensAcumulandoAgora,
             totalFechadoNaoPago,
             totalFechadoPago,
             mesReferenciaParaExibir,
@@ -654,6 +656,38 @@ document.addEventListener("DOMContentLoaded", function () {
                 `;
             }
 
+            const limiteDisponivel = (cartao.limite || 0) - estado.totalGastoGeral;
+            const estaAberto = cartoesComDetalheAberto.has(cartao.id);
+
+            let blocoVerItensHtml = "";
+            if (estado.itensAcumulandoAgora.length > 0) {
+                const linhasItens = estado.itensAcumulandoAgora.map((documento) => {
+                    const dados = documento.data();
+                    return `
+                        <li class="item-conta" style="padding: 8px 0;">
+                            <div class="info-conta">
+                                <div class="nome-conta" style="font-size: 13px;">${dados.descricao}</div>
+                            </div>
+                            <span class="valor-conta" style="font-size: 13px;">${formatarMoeda(dados.valor)}</span>
+                            <button class="botao-excluir-conta" data-id="${documento.id}" aria-label="Excluir item">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/>
+                                </svg>
+                            </button>
+                        </li>
+                    `;
+                }).join("");
+
+                blocoVerItensHtml = `
+                    <button type="button" class="link-botao-simples" data-acao="toggle-detalhe" data-cartao="${cartao.id}" style="display:block; margin-top: 6px;">
+                        ${estaAberto ? "Esconder itens dessa fatura ▲" : "Ver itens dessa fatura ▼"}
+                    </button>
+                    <ul class="lista-contas" style="margin-top: 6px;" ${estaAberto ? "" : "hidden"}>
+                        ${linhasItens}
+                    </ul>
+                `;
+            }
+
             const item = document.createElement("div");
             item.className = "fatura-cartao-item";
             item.innerHTML = `
@@ -661,9 +695,10 @@ document.addEventListener("DOMContentLoaded", function () {
                     <span class="fatura-cartao-nome">${cartao.nome}</span>
                     <button type="button" class="link-botao-simples" data-acao="editar" data-cartao="${cartao.id}">Editar</button>
                 </div>
-                <span class="fatura-cartao-valor">${formatarMoeda(cartao.limite || 0)}</span>
+                <span class="fatura-cartao-valor">${formatarMoeda(limiteDisponivel)}</span>
                 <span class="fatura-cartao-vencimento">${textoDatas}</span>
                 <span class="fatura-cartao-vencimento" style="display:block; margin-top:2px;">Você já gastou ${formatarMoeda(estado.totalGastoGeral)} do cartão</span>
+                ${blocoVerItensHtml}
                 ${blocoPagarHtml}
             `;
             listaFaturasCartoes.appendChild(item);
@@ -671,11 +706,30 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     listaFaturasCartoes.addEventListener("click", async (evento) => {
+        // O botão de excluir item (dentro do "ver itens dessa fatura") usa
+        // o mesmo padrão da lista de fatura fechada — reaproveita o
+        // handler já existente, em vez de duplicar a lógica de excluir
+        const botaoExcluirItem = evento.target.closest(".botao-excluir-conta");
+        if (botaoExcluirItem) {
+            await handlerCliqueListaItens(evento);
+            return;
+        }
+
         const botao = evento.target.closest("[data-acao]");
         if (!botao) return;
 
         const cartaoId = botao.dataset.cartao;
         const acao = botao.dataset.acao;
+
+        if (acao === "toggle-detalhe") {
+            if (cartoesComDetalheAberto.has(cartaoId)) {
+                cartoesComDetalheAberto.delete(cartaoId);
+            } else {
+                cartoesComDetalheAberto.add(cartaoId);
+            }
+            renderizarFaturas();
+            return;
+        }
 
         if (acao === "editar") {
             const cartao = listaDeCartoes.find((c) => c.id === cartaoId);
