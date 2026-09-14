@@ -54,25 +54,19 @@
             <div id="lista-faturas-cartoes"></div>
             <p class="lista-vazia" id="cartoes-vazio" hidden>Nenhum cartão cadastrado ainda. Toca em "+ Novo cartão" pra começar.</p>
 
-            <div class="cabecalho-lista-lembretes" style="margin: 28px 0 14px 0;" id="cabecalho-itens-atrasados" hidden>
-                <h3 class="titulo-secao" style="margin:0; color: var(--gasto-cor);">🔴 Atrasadas</h3>
-            </div>
-
-            <ul class="lista-contas" id="lista-itens-atrasados"></ul>
-
             <div class="cabecalho-lista-lembretes" style="margin: 28px 0 14px 0;">
-                <h3 class="titulo-secao" style="margin:0;">Itens da fatura de agora</h3>
+                <h3 class="titulo-secao" style="margin:0;">Itens da fatura fechada</h3>
             </div>
 
             <ul class="lista-contas" id="lista-itens-cartao"></ul>
-            <p class="lista-vazia" id="itens-cartao-vazio" hidden>Nada por aqui agora — compras no crédito só entram na fatura do mês seguinte, veja a seção abaixo.</p>
+            <p class="lista-vazia" id="itens-cartao-vazio" hidden>Nenhuma fatura fechada ainda — as compras aparecem aqui a partir do dia de fechamento do cartão.</p>
 
             <div class="cabecalho-lista-lembretes" style="margin: 28px 0 14px 0;">
-                <h3 class="titulo-secao" style="margin:0;">Itens das próximas faturas <span class="dica-campo">(ainda não fecharam)</span></h3>
+                <h3 class="titulo-secao" style="margin:0;">Itens ainda acumulando <span class="dica-campo">(fatura não fechou)</span></h3>
             </div>
 
             <ul class="lista-contas" id="lista-itens-proximo-mes"></ul>
-            <p class="lista-vazia" id="itens-proximo-mes-vazio" hidden>Nenhum item pras próximas faturas ainda — toda compra nova no crédito aparece aqui primeiro.</p>
+            <p class="lista-vazia" id="itens-proximo-mes-vazio" hidden>Nenhum item acumulando ainda — toda compra nova no crédito aparece aqui primeiro.</p>
         </main>
     </div>
 
@@ -125,6 +119,11 @@
                 <input type="text" id="campo-nome-cartao" placeholder="Ex: Nubank, Inter, Itaú...">
             </div>
             <div class="campo">
+                <label for="campo-fechamento-cartao">Fecha todo dia</label>
+                <input type="number" id="campo-fechamento-cartao" min="1" max="31" placeholder="Ex: 20" required>
+                <p class="dica-campo" style="margin-top: 6px;">O dia que a fatura "trava" — compras depois desse dia (incluindo no próprio dia) vão pra fatura seguinte.</p>
+            </div>
+            <div class="campo">
                 <label for="campo-vencimento-cartao">Vence todo dia</label>
                 <input type="number" id="campo-vencimento-cartao" min="1" max="31" placeholder="Ex: 10">
             </div>
@@ -152,6 +151,15 @@
             </div>
             <p class="texto-explicativo-guardado" id="texto-pagar-fatura-valor"></p>
             <div class="campo">
+                <label for="campo-forma-pagar-fatura">Forma de pagamento</label>
+                <select id="campo-forma-pagar-fatura" required>
+                    <option value="" disabled selected>Selecione...</option>
+                    <option value="dinheiro">Dinheiro</option>
+                    <option value="pix">PIX</option>
+                    <option value="debito">Débito</option>
+                </select>
+            </div>
+            <div class="campo" id="campo-banco-pagar-fatura-wrapper" hidden>
                 <label for="campo-banco-pagar-fatura">De qual banco sai o pagamento</label>
                 <select id="campo-banco-pagar-fatura" required></select>
             </div>

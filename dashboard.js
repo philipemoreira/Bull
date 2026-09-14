@@ -758,7 +758,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         cartoesCustomizados = [];
         resultado.forEach((documento) => {
-            cartoesCustomizados.push({ nome: documento.data().nome, diaVencimento: documento.data().diaVencimento, id: documento.id });
+            cartoesCustomizados.push({ nome: documento.data().nome, diaVencimento: documento.data().diaVencimento, diaFechamento: documento.data().diaFechamento, id: documento.id });
         });
     }
 
@@ -1367,6 +1367,18 @@ document.addEventListener("DOMContentLoaded", function () {
         return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}`;
     }
 
+    // Calcula em qual fatura (mês) uma compra feita HOJE deveria cair,
+    // dado o dia de fechamento do cartão escolhido: antes do fechamento,
+    // entra na fatura que ainda vai fechar esse mês; no dia do fechamento
+    // (inclusive) ou depois, já pula pra fatura do mês seguinte
+    function calcularMesReferenciaFatura(hoje, diaFechamento) {
+        if (hoje.getDate() < diaFechamento) {
+            return mesReferenciaString(hoje);
+        }
+        const proximoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+        return mesReferenciaString(proximoMes);
+    }
+
     atalhoHoje.addEventListener("click", () => {
         campoData.value = formatarDataParaCampo(new Date());
     });
@@ -1813,6 +1825,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // avulsa (uma vez só), fixo (repete 12 meses) e parcelado (N vezes).
     async function salvarNoCartao(valor, categoria, descricaoBase, cartaoId, ehFixo, ehParcelado, numeroParcelas) {
         const cartaoEscolhido = cartoesCustomizados.find((c) => c.id === cartaoId);
+        const diaFechamentoCartao = (cartaoEscolhido && cartaoEscolhido.diaFechamento) || 1;
         const diaVencimentoCartao = (cartaoEscolhido && cartaoEscolhido.diaVencimento) || 1;
         const hoje = new Date();
         const nomeItem = descricaoBase || categoria;
@@ -1822,12 +1835,18 @@ document.addEventListener("DOMContentLoaded", function () {
         const valorParcela = ehParcelado ? Math.floor((valor / numeroParcelas) * 100) / 100 : valor;
         const diferencaCentavos = ehParcelado ? Math.round((valor - valorParcela * numeroParcelas) * 100) / 100 : 0;
 
+        // A primeira ocorrência usa a regra de fechamento de verdade (antes
+        // do dia de fechamento, fatura desse mês; no dia ou depois, pula
+        // pra próxima) — as ocorrências seguintes (Fixo/Parcelado) só vão
+        // avançando um mês de cada vez a partir dali
+        const primeiroMesReferencia = calcularMesReferenciaFatura(hoje, diaFechamentoCartao);
+        const [anoBase, mesBase] = primeiroMesReferencia.split("-").map(Number);
+
         for (let indice = 0; indice < quantasVezes; indice++) {
-            const anoDestino = hoje.getFullYear();
-            const mesDestino = hoje.getMonth() + 1 + indice; // +1 = sempre começa no mês seguinte
-            const ultimoDiaDoMes = new Date(anoDestino, mesDestino + 1, 0).getDate();
+            const dataDestino = new Date(anoBase, (mesBase - 1) + indice, 1);
+            const ultimoDiaDoMes = new Date(dataDestino.getFullYear(), dataDestino.getMonth() + 1, 0).getDate();
             const diaFinal = Math.min(diaVencimentoCartao, ultimoDiaDoMes);
-            const mesReferencia = mesReferenciaString(new Date(anoDestino, mesDestino, 1));
+            const mesReferencia = mesReferenciaString(dataDestino);
             const ehUltima = indice === quantasVezes - 1;
             const valorDessaVez = (ehParcelado && ehUltima) ? valorParcela + diferencaCentavos : valorParcela;
 
@@ -1854,7 +1873,7 @@ document.addEventListener("DOMContentLoaded", function () {
             await addDoc(collection(db, "usuarios", uidAtual, "pendencias"), dadosPendencia);
         }
 
-        return mesReferenciaString(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1));
+        return primeiroMesReferencia;
     }
 
     async function salvarParcelado(valorTotal, numeroParcelas, categoria, descricaoBase, dataInicial, diaVencimento, formaPagamento, banco, chavePix) {

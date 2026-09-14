@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Histórico de Faturas Pagas — Bull</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="variaveis.css">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dashboard.css">
+    <link rel="stylesheet" href="extrato.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0A0A0A">
+    <link rel="apple-touch-icon" href="icone-192.png">
+    <link rel="icon" href="favicon-32.png" sizes="32x32">
+    <link rel="icon" href="favicon-16.png" sizes="16x16">
+</head>
+<body>
+
+    <div class="app-shell">
+        <header class="topo-app">
+            <a href="configuracoes.html" class="link-voltar" aria-label="Voltar">←</a>
+            <div class="marca-topo">Histórico de Faturas</div>
+            <span style="width:24px"></span>
+        </header>
+
+        <main class="conteudo-principal">
+            <div class="campo">
+                <label for="campo-escolher-cartao">Qual cartão</label>
+                <select id="campo-escolher-cartao"></select>
+            </div>
+            <p class="lista-vazia" id="sem-cartoes-vazio" hidden>Você ainda não tem nenhum cartão cadastrado.</p>
+
+            <ul class="lista-lancamentos" id="lista-historico-faturas"></ul>
+            <p class="lista-vazia" id="historico-vazio" hidden>Nenhuma fatura paga ainda pra esse cartão.</p>
+        </main>
+    </div>
+
+    <script type="module" src="historico-faturas.js"></script>
+</body>
+</html>
