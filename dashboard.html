@@ -369,6 +369,34 @@
         </div>
     </div>
 
+    <div class="fundo-modal" id="fundo-modal-editar-forma-pagamento">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Forma de pagamento</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-editar-forma-pagamento" aria-label="Fechar">✕</button>
+            </div>
+            <p class="texto-explicativo-guardado" id="texto-editar-forma-pagamento-contexto"></p>
+            <div class="campo">
+                <label for="campo-editar-forma-pagamento">Forma de pagamento</label>
+                <select id="campo-editar-forma-pagamento" required>
+                    <option value="" disabled selected>Selecione...</option>
+                    <option value="dinheiro">Dinheiro</option>
+                    <option value="pix">PIX</option>
+                    <option value="debito">Débito</option>
+                </select>
+            </div>
+            <div class="campo" id="campo-editar-banco-pagamento-wrapper" hidden>
+                <label for="campo-editar-banco-pagamento">De qual banco</label>
+                <select id="campo-editar-banco-pagamento" required></select>
+            </div>
+            <div class="mensagem-aviso" id="mensagem-aviso-editar-forma-pagamento" role="alert"></div>
+            <button type="button" class="botao-enviar" id="botao-salvar-editar-forma-pagamento">
+                <span class="texto-botao">Salvar forma de pagamento</span>
+                <span class="spinner-botao" hidden></span>
+            </button>
+        </div>
+    </div>
+
     <div class="fundo-modal" id="fundo-modal-confirmar">
         <div class="modal-lancamento">
             <div class="cabecalho-modal">

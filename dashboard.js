@@ -86,6 +86,15 @@ document.addEventListener("DOMContentLoaded", function () {
     const mensagemAvisoEditarPix = document.getElementById("mensagem-aviso-editar-pix");
     const botaoSalvarEditarPix = document.getElementById("botao-salvar-editar-pix");
 
+    const fundoModalEditarFormaPagamento = document.getElementById("fundo-modal-editar-forma-pagamento");
+    const botaoFecharEditarFormaPagamento = document.getElementById("botao-fechar-editar-forma-pagamento");
+    const textoEditarFormaPagamentoContexto = document.getElementById("texto-editar-forma-pagamento-contexto");
+    const campoEditarFormaPagamento = document.getElementById("campo-editar-forma-pagamento");
+    const campoEditarBancoPagamentoWrapper = document.getElementById("campo-editar-banco-pagamento-wrapper");
+    const campoEditarBancoPagamento = document.getElementById("campo-editar-banco-pagamento");
+    const mensagemAvisoEditarFormaPagamento = document.getElementById("mensagem-aviso-editar-forma-pagamento");
+    const botaoSalvarEditarFormaPagamento = document.getElementById("botao-salvar-editar-forma-pagamento");
+
     const fundoModalConfirmar = document.getElementById("fundo-modal-confirmar");
     const tituloModalConfirmar = document.getElementById("titulo-modal-confirmar");
     const textoModalConfirmar = document.getElementById("texto-modal-confirmar");
@@ -2018,6 +2027,21 @@ document.addEventListener("DOMContentLoaded", function () {
             textoValorTotal = `<div class="texto-pago-em" style="color: var(--text-muted);">Total da compra: ${formatarMoeda(totalDaCompra)}</div>`;
         }
 
+        // Forma de pagamento — sempre editável, pra pendências recorrentes
+        // que nasceram antes dessa funcionalidade existir, ou pra quando a
+        // pessoa simplesmente muda de banco depois. Só não aparece nos
+        // itens do cartão (crédito já tem seu próprio fluxo, fixo).
+        let linhaFormaPagamentoHtml = "";
+        if (!dados.noCartao) {
+            const descricaoEscapadaForma = (dados.descricao || "").replace(/"/g, "&quot;");
+            const nomesFormaPagamento = { dinheiro: "Dinheiro", pix: "PIX", debito: "Débito" };
+            const textoAtual = dados.formaPagamento ? (nomesFormaPagamento[dados.formaPagamento] || dados.formaPagamento) : null;
+            const textoBotaoForma = textoAtual
+                ? `Editar forma de pagamento (${textoAtual}${dados.banco ? " · " + dados.banco : ""})`
+                : "+ Adicionar forma de pagamento";
+            linhaFormaPagamentoHtml = `<div class="linha-acoes-pix" style="margin-top:6px;"><button type="button" class="link-botao-simples botao-editar-forma-pagamento" data-id="${documento.id}" data-grupo="${dados.grupoId || ""}" data-forma-atual="${dados.formaPagamento || ""}" data-banco-atual="${dados.banco || ""}" data-descricao="${descricaoEscapadaForma}">${textoBotaoForma}</button></div>`;
+        }
+
         // Chave PIX: se a forma de pagamento for PIX, sempre oferece um
         // jeito de adicionar/editar a chave — e, se já tiver uma salva,
         // mostra o botão de copiar também, pra usar na hora de pagar sem
@@ -2049,6 +2073,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <div class="meta-conta">${dados.categoria} · Vence dia ${dados.diaDoMes}</div>
                 ${textoValorTotal}
                 ${textoPagoEm}
+                ${linhaFormaPagamentoHtml}
                 ${linhaChavePixHtml}
             </div>
             <span class="valor-conta">${formatarMoeda(dados.valor)}</span>
@@ -2100,6 +2125,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // ==========================================================================
     let pendenciaEmExclusao = null; // { id, dados }
     let pendenciaPixEmEdicaoId = null;
+    let pendenciaFormaPagamentoEmEdicaoId = null;
+    let grupoFormaPagamentoEmEdicao = null;
     let grupoPixEmEdicao = null;
 
     function abrirModalEditarPix(id, grupoId, chaveAtual, descricao) {
@@ -2159,6 +2186,99 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
     let escopoExclusaoEscolhido = null; // "so-essa" | "todas"
+
+    function abrirModalEditarFormaPagamento(id, grupoId, formaAtual, bancoAtual, descricao) {
+        pendenciaFormaPagamentoEmEdicaoId = id;
+        grupoFormaPagamentoEmEdicao = grupoId || null;
+        campoEditarFormaPagamento.value = formaAtual || "";
+
+        if (formaAtual === "pix" || formaAtual === "debito") {
+            popularSelectBancoGenerico(campoEditarBancoPagamento);
+            campoEditarBancoPagamentoWrapper.hidden = false;
+            campoEditarBancoPagamento.required = true;
+            campoEditarBancoPagamento.value = bancoAtual || "__sem_banco__";
+        } else {
+            campoEditarBancoPagamentoWrapper.hidden = true;
+            campoEditarBancoPagamento.required = false;
+        }
+
+        textoEditarFormaPagamentoContexto.textContent = grupoFormaPagamentoEmEdicao
+            ? `Isso atualiza a forma de pagamento em "${descricao}" e em todas as próximas ocorrências ainda não pagas.`
+            : `Isso atualiza a forma de pagamento em "${descricao}".`;
+        mensagemAvisoEditarFormaPagamento.classList.remove("visivel");
+        fundoModalEditarFormaPagamento.classList.add("aberto");
+    }
+
+    campoEditarFormaPagamento.addEventListener("change", () => {
+        if (campoEditarFormaPagamento.value === "pix" || campoEditarFormaPagamento.value === "debito") {
+            popularSelectBancoGenerico(campoEditarBancoPagamento);
+            campoEditarBancoPagamentoWrapper.hidden = false;
+            campoEditarBancoPagamento.required = true;
+        } else {
+            campoEditarBancoPagamentoWrapper.hidden = true;
+            campoEditarBancoPagamento.required = false;
+        }
+    });
+
+    botaoFecharEditarFormaPagamento.addEventListener("click", () => {
+        fundoModalEditarFormaPagamento.classList.remove("aberto");
+    });
+    fundoModalEditarFormaPagamento.addEventListener("click", (evento) => {
+        if (evento.target === fundoModalEditarFormaPagamento) fundoModalEditarFormaPagamento.classList.remove("aberto");
+    });
+
+    botaoSalvarEditarFormaPagamento.addEventListener("click", async () => {
+        const novaForma = campoEditarFormaPagamento.value;
+        mensagemAvisoEditarFormaPagamento.classList.remove("visivel");
+
+        if (!novaForma) {
+            mensagemAvisoEditarFormaPagamento.textContent = "Escolhe uma forma de pagamento.";
+            mensagemAvisoEditarFormaPagamento.classList.add("visivel");
+            return;
+        }
+        if ((novaForma === "pix" || novaForma === "debito") && !campoEditarBancoPagamento.value) {
+            mensagemAvisoEditarFormaPagamento.textContent = "Escolhe de qual banco.";
+            mensagemAvisoEditarFormaPagamento.classList.add("visivel");
+            return;
+        }
+
+        const novoBanco = (novaForma === "pix" || novaForma === "debito")
+            ? (campoEditarBancoPagamento.value === "__sem_banco__" ? null : campoEditarBancoPagamento.value)
+            : null;
+
+        const spinner = botaoSalvarEditarFormaPagamento.querySelector(".spinner-botao");
+        botaoSalvarEditarFormaPagamento.disabled = true;
+        spinner.hidden = false;
+
+        try {
+            if (grupoFormaPagamentoEmEdicao) {
+                // Propaga pra todas as ocorrências do mesmo grupo (Fixo ou
+                // Parcelado) que ainda não foram pagas — os meses já pagos
+                // no passado continuam sem essa informação, porque não tem
+                // como "inventar" um dado que não existia na hora
+                const referenciaPendencias = collection(db, "usuarios", uidAtual, "pendencias");
+                const consultaGrupo = query(referenciaPendencias, where("grupoId", "==", grupoFormaPagamentoEmEdicao), where("pago", "==", false));
+                const resultado = await getDocs(consultaGrupo);
+
+                const lote = writeBatch(db);
+                resultado.forEach((documento) => {
+                    lote.update(documento.ref, { formaPagamento: novaForma, banco: novoBanco });
+                });
+                await lote.commit();
+            } else if (pendenciaFormaPagamentoEmEdicaoId) {
+                await updateDoc(doc(db, "usuarios", uidAtual, "pendencias", pendenciaFormaPagamentoEmEdicaoId), { formaPagamento: novaForma, banco: novoBanco });
+            }
+
+            fundoModalEditarFormaPagamento.classList.remove("aberto");
+            mostrarToast("Forma de pagamento salva ✓");
+        } catch (erro) {
+            mensagemAvisoEditarFormaPagamento.textContent = "Não deu pra salvar agora. Confere sua internet e tenta de novo.";
+            mensagemAvisoEditarFormaPagamento.classList.add("visivel");
+        } finally {
+            botaoSalvarEditarFormaPagamento.disabled = false;
+            spinner.hidden = true;
+        }
+    });
 
     function abrirModalExcluirPendencia() {
         const temGrupo = !!pendenciaEmExclusao.dados.grupoId;
@@ -2251,6 +2371,18 @@ document.addEventListener("DOMContentLoaded", function () {
         const botaoEditarPix = evento.target.closest(".botao-editar-pix");
         if (botaoEditarPix) {
             abrirModalEditarPix(botaoEditarPix.dataset.id, botaoEditarPix.dataset.grupo, botaoEditarPix.dataset.chaveAtual, botaoEditarPix.dataset.descricao);
+            return;
+        }
+
+        const botaoEditarFormaPagamento = evento.target.closest(".botao-editar-forma-pagamento");
+        if (botaoEditarFormaPagamento) {
+            abrirModalEditarFormaPagamento(
+                botaoEditarFormaPagamento.dataset.id,
+                botaoEditarFormaPagamento.dataset.grupo,
+                botaoEditarFormaPagamento.dataset.formaAtual,
+                botaoEditarFormaPagamento.dataset.bancoAtual,
+                botaoEditarFormaPagamento.dataset.descricao
+            );
             return;
         }
 
