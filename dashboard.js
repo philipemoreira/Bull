@@ -219,12 +219,52 @@ document.addEventListener("DOMContentLoaded", function () {
     let mapaOrcamentos = {}; // {categoria: limite}
     let primeiroNome = "";
     let idEmEdicao = null; // null = criando novo | string = editando esse lançamento
-    let saldoAtualDoMes = 0; // usado pra impedir guardar mais do que o saldo permite
+    let dadosOriginaisEmEdicao = null; // guarda os dados ANTES da edição, pra comparações corretas
+    let saldoAtualDoMes = 0; // ganhos - gastos do mês selecionado (cálculo de sempre)
+    let saldoExibidoETravado = 0; // o que REALMENTE aparece na tela e trava o Guardar
+    let saldoBancoPrincipalAtual = null; // null = sem banco principal (ou ainda não carregou)
+    let nomeBancoPrincipalAtual = null;
+    let pararDeEscutarSaldoBancoPrincipal = null;
     let modoGuardar = false; // true = a pessoa escolheu "Guardar" no modal
+
+    // Só usa o saldo do banco principal quando a pessoa está vendo o mês
+    // REAL de hoje — navegando pra outro mês (passado ou futuro), volta a
+    // mostrar o cálculo de ganhos-gastos daquele mês específico, porque
+    // "saldo do banco" não tem essa ideia de "como foi cada mês"
+    function ehMesAtualReal() {
+        const hoje = new Date();
+        return mesSelecionado.getFullYear() === hoje.getFullYear() && mesSelecionado.getMonth() === hoje.getMonth();
+    }
+
+    // Decide o que realmente aparece no número grande — chamada tanto
+    // depois de recalcular o mês (navegação) quanto quando o saldo do
+    // banco principal muda (reativo) — as duas situações precisam
+    // concordar em qual das duas fontes usar
+    function atualizarNumeroGrandeDoSaldo() {
+        if (ehMesAtualReal() && saldoBancoPrincipalAtual !== null) {
+            saldoExibidoETravado = saldoBancoPrincipalAtual;
+            totalSaldoEl.textContent = formatarMoeda(saldoBancoPrincipalAtual);
+            etiquetaBancoPrincipal.textContent = `Saldo do mês · ${nomeBancoPrincipalAtual}`;
+            etiquetaBancoPrincipal.hidden = false;
+        } else {
+            saldoExibidoETravado = saldoAtualDoMes;
+            totalSaldoEl.textContent = formatarMoeda(saldoAtualDoMes);
+            // Esconde a etiqueta fora do mês atual — ela não pode dizer
+            // "Sicredi" enquanto o número mostrado é o cálculo do mês
+            // (isso daria a entender, errado, que é o saldo do Sicredi)
+            etiquetaBancoPrincipal.hidden = true;
+        }
+    }
 
     // ==========================================================================
     // 3. VERIFICAR LOGIN
     // ==========================================================================
+    // Aplica a máscara de valor "tipo caixa eletrônico" em todo campo de
+    // dinheiro dessa tela
+    aplicarMascaraValor(campoValor);
+    aplicarMascaraValor(valorSalarioBanner);
+    aplicarMascaraValor(campoLimiteCategoria);
+
     onAuthStateChanged(auth, async (usuario) => {
         if (!usuario) {
             window.location.href = "index.html";
@@ -254,6 +294,7 @@ document.addEventListener("DOMContentLoaded", function () {
         await carregarMetas();
         await carregarBancos();
         await atualizarResumoBancos();
+        escutarSaldoBancoPrincipal();
         await carregarCartoes();
         if (!perfil.migracaoMesReferenciaConcluida) await migrarLancamentosAntigos();
         atualizarRotuloMes();
@@ -564,19 +605,40 @@ document.addEventListener("DOMContentLoaded", function () {
     // Busca uma vez só (não fica ouvindo em tempo real) — é só um resumo,
     // não precisa atualizar sozinho a cada segundo, e evita pesar a tela
     // mais visitada do app com uma busca grande toda hora.
+    // Busca o saldo real de UM banco específico, na hora — usada pra
+    // validar antes de uma transferência (Guardar), garantindo que o
+    // banco de origem realmente tem o valor que está saindo dele
+    async function calcularSaldoBancoAgora(nomeBanco, saldoInicial) {
+        const referenciaLancamentos = collection(db, "usuarios", uidAtual, "lancamentos");
+        const snapshotLancamentos = await getDocs(referenciaLancamentos);
+
+        let total = saldoInicial || 0;
+        snapshotLancamentos.forEach((documento) => {
+            const dados = documento.data();
+            const ehCategoriaEspecial = dados.categoria === "Guardar Dinheiro" || dados.categoria === "Retirada da Reserva";
+
+            if (dados.tipo === "ganho" && !ehCategoriaEspecial && dados.banco === nomeBanco) {
+                total += dados.valor;
+            }
+            if (dados.tipo === "gasto" && !ehCategoriaEspecial && (dados.formaPagamento === "pix" || dados.formaPagamento === "debito") && dados.banco === nomeBanco) {
+                total -= dados.valor;
+            }
+            if (dados.categoria === "Fatura do Cartão" && dados.banco === nomeBanco) {
+                total -= dados.valor;
+            }
+            if (ehCategoriaEspecial && dados.banco === nomeBanco) {
+                total += dados.valor;
+            }
+            if (dados.categoria === "Guardar Dinheiro" && dados.valor > 0 && dados.bancoOrigem === nomeBanco) {
+                total -= dados.valor;
+            }
+        });
+        return total;
+    }
+
     async function atualizarResumoBancos() {
         const referenciaBancos = collection(db, "usuarios", uidAtual, "bancos");
         const snapshotBancos = await getDocs(referenciaBancos);
-
-        // Etiqueta do Saldo do Mês, mostrando qual banco é o "principal" —
-        // só uma etiqueta visual, não muda o cálculo do saldo em nada
-        const bancoPrincipal = snapshotBancos.docs.find((documento) => documento.data().principal === true);
-        if (bancoPrincipal) {
-            etiquetaBancoPrincipal.textContent = `Saldo do mês · ${bancoPrincipal.data().nome}`;
-            etiquetaBancoPrincipal.hidden = false;
-        } else {
-            etiquetaBancoPrincipal.hidden = true;
-        }
 
         if (snapshotBancos.empty) {
             linkResumoBancos.hidden = true;
@@ -619,6 +681,66 @@ document.addEventListener("DOMContentLoaded", function () {
         linkResumoBancos.hidden = false;
         valorTotalBancos.textContent = formatarMoeda(totalGeral);
         atualizarVisibilidadeSecaoBancosCartoes();
+    }
+
+    // ==========================================================================
+    // SALDO DO MÊS = BANCO PRINCIPAL — quando existe um banco marcado como
+    // principal, o número do "Saldo do Mês" PARA de ser ganhos-gastos do
+    // mês, e passa a mostrar o saldo real desse banco, sempre — não importa
+    // pra qual mês a pessoa estiver navegando na tela. Reativo (onSnapshot),
+    // então atualiza sozinho a cada novo lançamento, sem precisar recarregar.
+    // ==========================================================================
+    function escutarSaldoBancoPrincipal() {
+        const referenciaBancos = collection(db, "usuarios", uidAtual, "bancos");
+        const consultaPrincipal = query(referenciaBancos, where("principal", "==", true));
+
+        onSnapshot(consultaPrincipal, (snapshotBancos) => {
+            // Para o "ouvinte" interno antigo (se tinha) antes de criar um
+            // novo — evita dois rodando ao mesmo tempo, ou um vazando
+            if (pararDeEscutarSaldoBancoPrincipal) {
+                pararDeEscutarSaldoBancoPrincipal();
+                pararDeEscutarSaldoBancoPrincipal = null;
+            }
+
+            if (snapshotBancos.empty) {
+                saldoBancoPrincipalAtual = null;
+                nomeBancoPrincipalAtual = null;
+                atualizarNumeroGrandeDoSaldo();
+                return;
+            }
+
+            const bancoPrincipal = { id: snapshotBancos.docs[0].id, ...snapshotBancos.docs[0].data() };
+            nomeBancoPrincipalAtual = bancoPrincipal.nome;
+
+            const referenciaLancamentos = collection(db, "usuarios", uidAtual, "lancamentos");
+            pararDeEscutarSaldoBancoPrincipal = onSnapshot(referenciaLancamentos, (snapshotLancamentos) => {
+                let total = bancoPrincipal.saldoInicial || 0;
+
+                snapshotLancamentos.forEach((documento) => {
+                    const dados = documento.data();
+                    const ehCategoriaEspecial = dados.categoria === "Guardar Dinheiro" || dados.categoria === "Retirada da Reserva";
+
+                    if (dados.tipo === "ganho" && !ehCategoriaEspecial && dados.banco === bancoPrincipal.nome) {
+                        total += dados.valor;
+                    }
+                    if (dados.tipo === "gasto" && !ehCategoriaEspecial && (dados.formaPagamento === "pix" || dados.formaPagamento === "debito") && dados.banco === bancoPrincipal.nome) {
+                        total -= dados.valor;
+                    }
+                    if (dados.categoria === "Fatura do Cartão" && dados.banco === bancoPrincipal.nome) {
+                        total -= dados.valor;
+                    }
+                    if (ehCategoriaEspecial && dados.banco === bancoPrincipal.nome) {
+                        total += dados.valor;
+                    }
+                    if (dados.categoria === "Guardar Dinheiro" && dados.valor > 0 && dados.bancoOrigem === bancoPrincipal.nome) {
+                        total -= dados.valor;
+                    }
+                });
+
+                saldoBancoPrincipalAtual = total;
+                atualizarNumeroGrandeDoSaldo();
+            });
+        });
     }
 
     async function carregarCartoes() {
@@ -825,7 +947,8 @@ document.addEventListener("DOMContentLoaded", function () {
         categoriaEmEdicaoNomeAntigo = opcaoSelecionada.value;
 
         campoNovoNomeCategoria.value = categoriaEmEdicaoNomeAntigo;
-        campoLimiteCategoria.value = mapaOrcamentos[categoriaEmEdicaoNomeAntigo] || "";
+        const limiteExistente = mapaOrcamentos[categoriaEmEdicaoNomeAntigo];
+        campoLimiteCategoria.value = limiteExistente ? limiteExistente.toFixed(2).replace(".", ",") : "";
         mensagemAvisoEditarCategoria.classList.remove("visivel");
 
         // "Limite mensal" e "Vencimento" só fazem sentido pra categorias de
@@ -989,6 +1112,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // ==========================================================================
     function abrirModalNovo() {
         idEmEdicao = null;
+        dadosOriginaisEmEdicao = null;
         modoGuardar = false;
         tituloModal.textContent = "Novo lançamento";
         textoBotaoSalvar.textContent = "Salvar lançamento";
@@ -1031,7 +1155,13 @@ document.addEventListener("DOMContentLoaded", function () {
     // ==========================================================================
     function abrirModalEdicao(idLancamento, dados) {
         idEmEdicao = idLancamento;
-        modoGuardar = false;
+        dadosOriginaisEmEdicao = dados;
+        // Só o DEPÓSITO do Guardar (valor positivo) é editável com campos
+        // próprios — a Retirada usa 2 lançamentos ligados, editar os dois
+        // de forma consistente é um caso mais complexo, fica de fora por
+        // enquanto (continua editável só por valor/descrição/data)
+        const ehGuardarDeposito = dados.categoria === "Guardar Dinheiro" && dados.valor > 0;
+        modoGuardar = ehGuardarDeposito;
         tituloModal.textContent = "Editar lançamento";
         textoBotaoSalvar.textContent = "Salvar alterações";
 
@@ -1045,19 +1175,43 @@ document.addEventListener("DOMContentLoaded", function () {
         opcoesEspeciaisGasto.hidden = true; // editar não deve gerar novas parcelas/repetições
         campoCategoriaWrapper.hidden = false;
         campoCategoria.required = true;
-
-        popularSelectCategorias(dados.categoria);
-        campoValor.value = dados.valor;
-        campoDescricao.value = dados.descricao || "";
-        campoData.value = formatarDataParaCampo(dados.data.toDate());
         campoNovaCategoriaWrapper.hidden = true;
         campoVencimentoNovaCategoriaWrapper.hidden = true;
         campoNovaCategoria.required = false;
         campoParcelas.required = false;
 
+        campoValor.value = dados.valor.toFixed(2).replace(".", ",");
+        campoDescricao.value = dados.descricao || "";
+        campoDescricaoWrapper.hidden = false; // editar sempre mostra a descrição, mesmo pra Guardar
+        campoData.value = formatarDataParaCampo(dados.data.toDate());
+
+        if (ehGuardarDeposito) {
+            rotuloCategoria.textContent = "Meta";
+            popularSelectMetas();
+            campoCategoria.value = dados.meta || "__sem_meta__";
+
+            campoBancoOrigemWrapper.hidden = false;
+            campoBancoOrigem.required = true;
+            popularSelectBancoGenerico(campoBancoOrigem);
+            campoBancoOrigem.value = dados.bancoOrigem || "__sem_banco__";
+
+            campoBancoWrapper.hidden = false;
+            campoBanco.required = true;
+            popularSelectBancoGenerico(campoBanco);
+            campoBanco.value = dados.banco || "__sem_banco__";
+        } else {
+            rotuloCategoria.textContent = "Categoria";
+            popularSelectCategorias(dados.categoria);
+            campoBancoOrigemWrapper.hidden = true;
+            campoBancoOrigem.required = false;
+            campoBancoWrapper.hidden = true;
+            campoBanco.required = false;
+        }
+
         // Forma de pagamento/banco só entram na edição pra Gasto e Extra
-        // "normais" — Guardar tem campo próprio, e a Fatura do Cartão é um
-        // agregado especial que não faz sentido reclassificar por aqui
+        // "normais" — Guardar já tem seus próprios campos (acima), e a
+        // Fatura do Cartão é um agregado especial que não faz sentido
+        // reclassificar por aqui
         const ehCategoriaEspecial = dados.categoria === "Guardar Dinheiro" || dados.categoria === "Retirada da Reserva" || dados.categoria === "Fatura do Cartão";
         campoFormaPagamentoWrapper.hidden = true;
         campoFormaPagamento.required = false;
@@ -1384,8 +1538,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Compara em centavos (números inteiros), mesmo motivo da correção
         // na tela de Saldo Guardado — evita erro de ponto flutuante
-        if (modoGuardar && Math.round(valorDigitado * 100) > Math.round(saldoAtualDoMes * 100)) {
-            mostrarAviso(`Esse valor é maior do que o seu saldo atual (${formatarMoeda(saldoAtualDoMes)}). Não dá pra guardar mais do que você tem.`);
+        if (modoGuardar && Math.round(valorDigitado * 100) > Math.round(saldoExibidoETravado * 100)) {
+            mostrarAviso(`Esse valor é maior do que o seu saldo atual (${formatarMoeda(saldoExibidoETravado)}). Não dá pra guardar mais do que você tem.`);
             return;
         }
 
@@ -1420,6 +1574,33 @@ document.addEventListener("DOMContentLoaded", function () {
                 mostrarAviso(`"De qual banco" e "Para qual banco" não podem ser o mesmo (${bancoFinal}). Se é pra só separar mentalmente, sem mover de verdade, escolhe "Sem banco específico" nos dois.`);
                 return;
             }
+
+            // Confere se o banco de origem realmente tem o valor que está
+            // saindo dele — sem essa trava, dava pra "guardar" mais do que
+            // o banco realmente tem, deixando ele negativo sem avisar nada
+            if (bancoOrigemFinal) {
+                const bancoOrigemDoc = bancosCustomizados.find((b) => b.nome === bancoOrigemFinal);
+                if (bancoOrigemDoc) {
+                    const snapshotOrigem = await getDoc(doc(db, "usuarios", uidAtual, "bancos", bancoOrigemDoc.id));
+                    const saldoInicialOrigem = snapshotOrigem.exists() ? (snapshotOrigem.data().saldoInicial || 0) : 0;
+                    let saldoRealOrigem = await calcularSaldoBancoAgora(bancoOrigemFinal, saldoInicialOrigem);
+
+                    // Se estamos EDITANDO uma transferência que já tinha
+                    // esse MESMO banco como origem, "devolve" o valor
+                    // antigo antes de checar — senão o próprio efeito
+                    // dessa transação (já contado no saldo atual) barraria
+                    // uma edição que só corrige um detalhe, tipo a
+                    // descrição, sem de fato mudar o valor
+                    if (idEmEdicao && dadosOriginaisEmEdicao && dadosOriginaisEmEdicao.bancoOrigem === bancoOrigemFinal) {
+                        saldoRealOrigem += dadosOriginaisEmEdicao.valor;
+                    }
+
+                    if (Math.round(valorDigitado * 100) > Math.round(saldoRealOrigem * 100)) {
+                        mostrarAviso(`O ${bancoOrigemFinal} só tem ${formatarMoeda(saldoRealOrigem)} — não dá pra guardar mais do que isso de lá.`);
+                        return;
+                    }
+                }
+            }
         } else if (categoriaFinal === "__nova__") {
             const nomeNovaCategoria = campoNovaCategoria.value.trim();
             if (!nomeNovaCategoria) {
@@ -1446,6 +1627,13 @@ document.addEventListener("DOMContentLoaded", function () {
                     categoriasCustomizadas[tipoSelecionado].push({ nome: categoriaFinal, id: referenciaCategoria.id });
                 }
 
+                if (modoGuardar && campoCategoria.value === "__nova__") {
+                    const referenciaMeta = await addDoc(collection(db, "usuarios", uidAtual, "metas"), {
+                        nome: metaFinal
+                    });
+                    metasCustomizadas.push({ nome: metaFinal, id: referenciaMeta.id });
+                }
+
                 const dadosAtualizados = {
                     valor: valorDigitado,
                     categoria: categoriaFinal,
@@ -1453,11 +1641,14 @@ document.addEventListener("DOMContentLoaded", function () {
                     data: Timestamp.fromDate(construirDataComHorarioReal(campoData.value))
                 };
 
-                // Só mexe em forma de pagamento/banco se esses campos
-                // estiverem visíveis nessa edição (Gasto ou Extra normais —
-                // Guardar e Fatura do Cartão não passam por aqui, e ficam
-                // com o que já tinham, sem alteração nenhuma)
-                if (!campoFormaPagamentoWrapper.hidden) {
+                // Guardar tem seus próprios campos (Meta + os 2 bancos da
+                // transferência) — diferente de Gasto/Extra, que usam
+                // forma de pagamento/banco
+                if (modoGuardar) {
+                    dadosAtualizados.meta = metaFinal;
+                    dadosAtualizados.banco = bancoFinal;
+                    dadosAtualizados.bancoOrigem = bancoOrigemFinal;
+                } else if (!campoFormaPagamentoWrapper.hidden) {
                     dadosAtualizados.formaPagamento = campoFormaPagamento.value;
                     dadosAtualizados.banco = (campoFormaPagamento.value === "pix" || campoFormaPagamento.value === "debito")
                         ? (campoBancoPagamento.value === "__sem_banco__" ? null : campoBancoPagamento.value)
@@ -2249,7 +2440,7 @@ document.addEventListener("DOMContentLoaded", function () {
         perguntaSalario.textContent = primeiroNome
             ? `Olá, ${primeiroNome}! Já recebeu seu salário deste mês?`
             : "Já recebeu seu salário deste mês?";
-        valorSalarioBanner.value = salarioPadrao;
+        valorSalarioBanner.value = salarioPadrao.toFixed(2).replace(".", ",");
     }
 
     botaoConfirmarSalario.addEventListener("click", async () => {
@@ -2442,7 +2633,7 @@ document.addEventListener("DOMContentLoaded", function () {
         totalGanhosEl.textContent = formatarMoeda(totalGanhos);
         totalGastosEl.textContent = formatarMoeda(totalGastos);
         saldoAtualDoMes = totalGanhos - totalGastos;
-        totalSaldoEl.textContent = formatarMoeda(saldoAtualDoMes);
+        atualizarNumeroGrandeDoSaldo();
 
         totalGastosAtual = totalGastos;
         atualizarComparacaoMesAnterior();
@@ -2480,11 +2671,38 @@ document.addEventListener("DOMContentLoaded", function () {
         return valorCorrigido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     }
 
-    // Converte texto digitado em número, aceitando tanto vírgula quanto ponto
-    // como separador decimal — os campos de valor viraram type="text" (não
-    // "number") justamente pra vírgula funcionar, então precisam disso aqui
+    // Converte texto digitado em número — remove pontos (separador de
+    // milhar) antes de trocar a vírgula por ponto decimal, então funciona
+    // tanto com "1500,00" quanto com "1.500,00"
     function paraNumero(texto) {
-        return parseFloat(String(texto).replace(",", "."));
+        return parseFloat(String(texto).replace(/\./g, "").replace(",", "."));
+    }
+
+    // Aplica a máscara "tipo caixa eletrônico": os dígitos digitados
+    // entram sempre da direita pra esquerda (representando centavos), sem
+    // precisar digitar vírgula — cada novo número empurra os anteriores
+    // pra esquerda, exatamente como um caixa eletrônico de banco
+    function aplicarMascaraValor(input) {
+        function reformatar() {
+            const digitos = input.value.replace(/\D/g, "");
+            if (digitos === "") {
+                input.value = "";
+                return;
+            }
+            const centavos = parseInt(digitos, 10);
+            const reais = Math.floor(centavos / 100);
+            const centavosRestantes = centavos % 100;
+            input.value = `${reais},${String(centavosRestantes).padStart(2, "0")}`;
+        }
+        input.addEventListener("input", () => {
+            reformatar();
+            input.setSelectionRange(input.value.length, input.value.length);
+        });
+        // Ao focar, joga o cursor pro final — impede editar no meio do
+        // número, que quebraria a lógica de "sempre entra pela direita"
+        input.addEventListener("focus", () => {
+            setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+        });
     }
 
     // ==========================================================================

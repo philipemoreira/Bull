@@ -1,5 +1,6 @@
-import { auth } from "./firebase-config.js";
+import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { collection, getDocs, doc, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -11,6 +12,16 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoConfirmarAcao = document.getElementById("botao-confirmar-acao");
     const botaoCancelarAcao = document.getElementById("botao-cancelar-acao");
     const botaoFecharConfirmar = document.getElementById("botao-fechar-confirmar");
+
+    const botaoAbrirTrocarPrincipal = document.getElementById("botao-abrir-trocar-principal");
+    const fundoModalTrocarPrincipal = document.getElementById("fundo-modal-trocar-principal");
+    const botaoFecharTrocarPrincipal = document.getElementById("botao-fechar-trocar-principal");
+    const campoNovoBancoPrincipal = document.getElementById("campo-novo-banco-principal");
+    const mensagemAvisoTrocarPrincipal = document.getElementById("mensagem-aviso-trocar-principal");
+    const botaoContinuarTrocarPrincipal = document.getElementById("botao-continuar-trocar-principal");
+
+    let uidAtual = null;
+    let listaDeBancos = [];
 
     // Substitui o confirm() feio do navegador por uma telinha nas cores do app
     function confirmarComTelinha(mensagem, titulo = "Confirmar") {
@@ -37,7 +48,9 @@ document.addEventListener("DOMContentLoaded", function () {
     onAuthStateChanged(auth, (usuario) => {
         if (!usuario) {
             window.location.href = "index.html";
+            return;
         }
+        uidAtual = usuario.uid;
     });
 
     botaoSair.addEventListener("click", async () => {
@@ -46,6 +59,73 @@ document.addEventListener("DOMContentLoaded", function () {
 
         await signOut(auth);
         window.location.href = "index.html";
+    });
+
+    // ==========================================================================
+    // TROCAR BANCO PRINCIPAL — de propósito escondido aqui em Configurações,
+    // e com uma etapa extra de confirmação, pra não ser fácil de trocar sem
+    // querer (isso afeta direto o número do Saldo do Mês na tela inicial)
+    // ==========================================================================
+    botaoAbrirTrocarPrincipal.addEventListener("click", async () => {
+        const referencia = collection(db, "usuarios", uidAtual, "bancos");
+        const resultado = await getDocs(referencia);
+        listaDeBancos = resultado.docs.map((documento) => ({ id: documento.id, ...documento.data() }));
+
+        campoNovoBancoPrincipal.innerHTML = "";
+        mensagemAvisoTrocarPrincipal.classList.remove("visivel");
+
+        if (listaDeBancos.length === 0) {
+            mensagemAvisoTrocarPrincipal.textContent = "Você ainda não tem nenhum banco cadastrado. Cria um primeiro, na tela Bancos e Cartões.";
+            mensagemAvisoTrocarPrincipal.classList.add("visivel");
+            botaoContinuarTrocarPrincipal.disabled = true;
+        } else {
+            botaoContinuarTrocarPrincipal.disabled = false;
+            listaDeBancos.forEach((banco) => {
+                const opcao = document.createElement("option");
+                opcao.value = banco.id;
+                opcao.textContent = banco.principal ? `${banco.nome} (atual)` : banco.nome;
+                if (banco.principal) opcao.selected = true;
+                campoNovoBancoPrincipal.appendChild(opcao);
+            });
+        }
+
+        fundoModalTrocarPrincipal.classList.add("aberto");
+    });
+
+    botaoFecharTrocarPrincipal.addEventListener("click", () => {
+        fundoModalTrocarPrincipal.classList.remove("aberto");
+    });
+    fundoModalTrocarPrincipal.addEventListener("click", (evento) => {
+        if (evento.target === fundoModalTrocarPrincipal) fundoModalTrocarPrincipal.classList.remove("aberto");
+    });
+
+    botaoContinuarTrocarPrincipal.addEventListener("click", async () => {
+        const idEscolhido = campoNovoBancoPrincipal.value;
+        const bancoEscolhido = listaDeBancos.find((b) => b.id === idEscolhido);
+        if (!bancoEscolhido) return;
+
+        if (bancoEscolhido.principal) {
+            mensagemAvisoTrocarPrincipal.textContent = "Esse já é o banco principal atual.";
+            mensagemAvisoTrocarPrincipal.classList.add("visivel");
+            return;
+        }
+
+        fundoModalTrocarPrincipal.classList.remove("aberto");
+
+        const confirmou = await confirmarComTelinha(
+            `Tem certeza de que quer trocar o banco principal pra "${bancoEscolhido.nome}"? Isso NÃO transfere nenhum dinheiro — só troca qual saldo aparece no "Saldo do Mês" da tela inicial.`,
+            "Confirmar troca de banco principal"
+        );
+        if (!confirmou) return;
+
+        const lote = writeBatch(db);
+        listaDeBancos.forEach((banco) => {
+            if (banco.principal && banco.id !== idEscolhido) {
+                lote.update(doc(db, "usuarios", uidAtual, "bancos", banco.id), { principal: false });
+            }
+        });
+        lote.update(doc(db, "usuarios", uidAtual, "bancos", idEscolhido), { principal: true });
+        await lote.commit();
     });
 
 });

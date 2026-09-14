@@ -243,6 +243,10 @@
     margin: 24px 0 14px 0;
 }
 
+.cabecalho-lista-lembretes[hidden] {
+    display: none;
+}
+
 .botao-selecionar-lembretes {
     background: none;
     border: 1px solid var(--borda);

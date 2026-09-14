@@ -17,6 +17,31 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let uidAtual = null;
 
+    // Aplica a máscara "tipo caixa eletrônico": os dígitos digitados
+    // entram sempre da direita pra esquerda (representando centavos), sem
+    // precisar digitar vírgula
+    function aplicarMascaraValor(input) {
+        function reformatar() {
+            const digitos = input.value.replace(/\D/g, "");
+            if (digitos === "") {
+                input.value = "";
+                return;
+            }
+            const centavos = parseInt(digitos, 10);
+            const reais = Math.floor(centavos / 100);
+            const centavosRestantes = centavos % 100;
+            input.value = `${reais},${String(centavosRestantes).padStart(2, "0")}`;
+        }
+        input.addEventListener("input", () => {
+            reformatar();
+            input.setSelectionRange(input.value.length, input.value.length);
+        });
+        input.addEventListener("focus", () => {
+            setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+        });
+    }
+    aplicarMascaraValor(campoSalario);
+
     // Limita a seleção a no máximo 2 profissões marcadas ao mesmo tempo
     const checkboxesProfissao = listaProfissoes.querySelectorAll("input[type=checkbox]");
     checkboxesProfissao.forEach((checkbox) => {
@@ -43,7 +68,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const perfil = perfilSnapshot.data();
         campoNome.value = perfil.nome || "";
         campoNascimento.value = perfil.dataNascimento || "";
-        campoSalario.value = perfil.salarioPadrao || 0;
+        campoSalario.value = perfil.salarioPadrao ? perfil.salarioPadrao.toFixed(2).replace(".", ",") : "";
 
         const profissoesAtuais = Array.isArray(perfil.profissoes) ? perfil.profissoes : [];
         checkboxesProfissao.forEach((checkbox) => {
@@ -57,7 +82,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const nome = campoNome.value.trim();
         const dataNascimento = campoNascimento.value;
-        const salarioPadrao = parseFloat(campoSalario.value.replace(",", "."));
+        const salarioPadrao = parseFloat(campoSalario.value.replace(/\./g, "").replace(",", "."));
         const profissoes = [...listaProfissoes.querySelectorAll("input[type=checkbox]:checked")].map((c) => c.value);
 
         if (!nome || !dataNascimento || isNaN(salarioPadrao)) {

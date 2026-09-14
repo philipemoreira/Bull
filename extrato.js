@@ -244,7 +244,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // Converte texto digitado em número, aceitando vírgula ou ponto como
     // separador decimal (os campos de valor viraram type="text" pra isso)
     function paraNumero(texto) {
-        return parseFloat(String(texto).replace(",", "."));
+        return parseFloat(String(texto).replace(/\./g, "").replace(",", "."));
     }
 
     function formatarMoeda(valor) {

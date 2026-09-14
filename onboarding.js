@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const campoNome = document.getElementById("campo-nome");
     const campoNascimento = document.getElementById("campo-nascimento");
     const campoSalario = document.getElementById("campo-salario");
+    aplicarMascaraValor(campoSalario);
     const listaProfissoes = document.getElementById("lista-profissoes");
     const mensagemAviso = document.getElementById("mensagem-aviso");
     const botaoEnviar = document.getElementById("botao-enviar");
@@ -24,15 +25,43 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let uidAtual = null;
 
-    // Converte texto digitado em número, aceitando vírgula ou ponto
+    // Converte texto digitado em número — remove pontos (separador de
+    // milhar) antes de trocar a vírgula por ponto decimal
     function paraNumero(texto) {
-        return parseFloat(String(texto).replace(",", "."));
+        return parseFloat(String(texto).replace(/\./g, "").replace(",", "."));
+    }
+
+    // Aplica a máscara "tipo caixa eletrônico": os dígitos digitados
+    // entram sempre da direita pra esquerda (representando centavos), sem
+    // precisar digitar vírgula
+    function aplicarMascaraValor(input) {
+        function reformatar() {
+            const digitos = input.value.replace(/\D/g, "");
+            if (digitos === "") {
+                input.value = "";
+                return;
+            }
+            const centavos = parseInt(digitos, 10);
+            const reais = Math.floor(centavos / 100);
+            const centavosRestantes = centavos % 100;
+            input.value = `${reais},${String(centavosRestantes).padStart(2, "0")}`;
+        }
+        input.addEventListener("input", () => {
+            reformatar();
+            input.setSelectionRange(input.value.length, input.value.length);
+        });
+        input.addEventListener("focus", () => {
+            setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+        });
     }
 
     // ==========================================================================
     // ETAPA 2 — BANCOS (pulável)
     // ==========================================================================
+    let contadorLinhasBanco = 0;
+
     function adicionarLinhaBanco() {
+        contadorLinhasBanco++;
         const linha = document.createElement("div");
         linha.className = "linha-banco-onboarding";
         linha.innerHTML = `
@@ -49,8 +78,25 @@ document.addEventListener("DOMContentLoaded", function () {
             </div>
             <button type="button" class="botao-remover-linha-banco" aria-label="Remover">✕</button>
         `;
+        // O rádio (marca só um por vez) fica numa linha própria, embaixo
+        // dos dois campos — mais larga que a coluna de cada input
+        const linhaRadio = document.createElement("label");
+        linhaRadio.className = "item-checkbox";
+        linhaRadio.style.cssText = "width: 100%; margin-top: -6px; margin-bottom: 14px;";
+        linhaRadio.innerHTML = `<input type="radio" name="banco-principal-onboarding" class="input-principal-banco-onboarding" ${contadorLinhasBanco === 1 ? "checked" : ""}> Esse é meu banco principal`;
+        linha.appendChild(linhaRadio);
+
+        aplicarMascaraValor(linha.querySelector(".input-saldo-banco-onboarding"));
+
         linha.querySelector(".botao-remover-linha-banco").addEventListener("click", () => {
+            const eraPrincipal = linha.querySelector(".input-principal-banco-onboarding").checked;
             linha.remove();
+            // Se removeu a linha que estava marcada como principal, marca a
+            // primeira que sobrou (pra nunca ficar sem nenhuma selecionada)
+            if (eraPrincipal) {
+                const primeiraRestante = listaBancosOnboarding.querySelector(".input-principal-banco-onboarding");
+                if (primeiraRestante) primeiraRestante.checked = true;
+            }
         });
         listaBancosOnboarding.appendChild(linha);
     }
@@ -64,11 +110,20 @@ document.addEventListener("DOMContentLoaded", function () {
         linhas.forEach((linha) => {
             const nome = linha.querySelector(".input-nome-banco-onboarding").value.trim();
             const saldoTexto = linha.querySelector(".input-saldo-banco-onboarding").value;
+            const principal = linha.querySelector(".input-principal-banco-onboarding").checked;
             // Linhas sem nome são simplesmente ignoradas — a pessoa pode ter
             // clicado "+ Adicionar" e desistido, sem preencher
             if (nome) {
-                bancosParaSalvar.push({ nome, saldoInicial: paraNumero(saldoTexto) || 0, principal: false });
+                bancosParaSalvar.push({ nome, saldoInicial: paraNumero(saldoTexto) || 0, principal });
             }
+        });
+
+        // Garantia extra: nunca deixa salvar mais de um banco marcado como
+        // principal (só o primeiro que encontrar continua marcado)
+        let jaTemPrincipal = false;
+        bancosParaSalvar.forEach((banco) => {
+            if (banco.principal && jaTemPrincipal) banco.principal = false;
+            if (banco.principal) jaTemPrincipal = true;
         });
 
         for (const banco of bancosParaSalvar) {

@@ -19,7 +19,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const textoSaldoAtualBanco = document.getElementById("texto-saldo-atual-banco");
     const campoCorrigirSaldoWrapper = document.getElementById("campo-corrigir-saldo-wrapper");
     const campoCorrigirSaldoBanco = document.getElementById("campo-corrigir-saldo-banco");
-    const campoBancoPrincipal = document.getElementById("campo-banco-principal");
+    const textoIndicadorPrincipal = document.getElementById("texto-indicador-principal");
     const mensagemAvisoBancoReal = document.getElementById("mensagem-aviso-banco-real");
     const botaoSalvarBancoReal = document.getElementById("botao-salvar-banco-real");
     const botaoRemoverBancoReal = document.getElementById("botao-remover-banco-real");
@@ -117,12 +117,40 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function paraNumero(texto) {
-        return parseFloat(String(texto).replace(",", "."));
+        return parseFloat(String(texto).replace(/\./g, "").replace(",", "."));
+    }
+
+    // Aplica a máscara "tipo caixa eletrônico": os dígitos digitados
+    // entram sempre da direita pra esquerda (representando centavos), sem
+    // precisar digitar vírgula
+    function aplicarMascaraValor(input) {
+        function reformatar() {
+            const digitos = input.value.replace(/\D/g, "");
+            if (digitos === "") {
+                input.value = "";
+                return;
+            }
+            const centavos = parseInt(digitos, 10);
+            const reais = Math.floor(centavos / 100);
+            const centavosRestantes = centavos % 100;
+            input.value = `${reais},${String(centavosRestantes).padStart(2, "0")}`;
+        }
+        input.addEventListener("input", () => {
+            reformatar();
+            input.setSelectionRange(input.value.length, input.value.length);
+        });
+        input.addEventListener("focus", () => {
+            setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+        });
     }
 
     // ==========================================================================
     // LOGIN E CARREGAMENTO INICIAL
     // ==========================================================================
+    aplicarMascaraValor(campoSaldoInicialBanco);
+    aplicarMascaraValor(campoCorrigirSaldoBanco);
+    aplicarMascaraValor(campoLimiteCartao);
+
     onAuthStateChanged(auth, async (usuario) => {
         if (!usuario) {
             window.location.href = "index.html";
@@ -152,7 +180,7 @@ document.addEventListener("DOMContentLoaded", function () {
         tituloModalCartao.textContent = cartao ? "Editar cartão" : "Novo cartão";
         campoNomeCartao.value = cartao ? cartao.nome : "";
         campoVencimentoCartao.value = cartao ? (cartao.diaVencimento || "") : "";
-        campoLimiteCartao.value = cartao && cartao.limite ? String(cartao.limite).replace(".", ",") : "";
+        campoLimiteCartao.value = cartao && cartao.limite ? cartao.limite.toFixed(2).replace(".", ",") : "";
         botaoRemoverCartao.hidden = !cartao;
         mensagemAvisoCartao.classList.remove("visivel");
         fundoModalCartao.classList.add("aberto");
@@ -649,11 +677,23 @@ document.addEventListener("DOMContentLoaded", function () {
         bancoRealEmEdicaoId = banco ? banco.id : null;
         tituloModalBancoReal.textContent = banco ? "Editar banco" : "Novo banco";
         campoNomeBancoReal.value = banco ? banco.nome : "";
-        campoSaldoInicialBanco.value = banco && banco.saldoInicial ? String(banco.saldoInicial).replace(".", ",") : "";
-        campoBancoPrincipal.checked = banco ? !!banco.principal : false;
+        campoSaldoInicialBanco.value = banco && banco.saldoInicial ? banco.saldoInicial.toFixed(2).replace(".", ",") : "";
         campoCorrigirSaldoBanco.value = "";
         botaoRemoverBancoReal.hidden = !banco;
         mensagemAvisoBancoReal.classList.remove("visivel");
+
+        // "Principal" não é mais editável aqui — só um indicador. Trocar de
+        // banco principal é uma decisão importante (afeta o Saldo do Mês),
+        // por isso mora escondida em Configurações, não num campo fácil
+        if (banco && banco.principal) {
+            textoIndicadorPrincipal.textContent = "⭐ Esse é o seu banco principal hoje. Pra trocar, vai em Configurações.";
+            textoIndicadorPrincipal.hidden = false;
+        } else if (banco) {
+            textoIndicadorPrincipal.textContent = "Esse banco não é o principal. Pra mudar isso, vai em Configurações.";
+            textoIndicadorPrincipal.hidden = false;
+        } else {
+            textoIndicadorPrincipal.hidden = true;
+        }
 
         // O ajuste rápido só faz sentido editando um banco que já existe —
         // pra um banco novo, "saldo inicial" já é o próprio ponto de partida
@@ -713,7 +753,6 @@ document.addEventListener("DOMContentLoaded", function () {
     botaoSalvarBancoReal.addEventListener("click", async () => {
         const nome = campoNomeBancoReal.value.trim();
         let saldoInicial = paraNumero(campoSaldoInicialBanco.value) || 0;
-        const principal = campoBancoPrincipal.checked;
         mensagemAvisoBancoReal.classList.remove("visivel");
 
         if (!nome) {
@@ -745,24 +784,13 @@ document.addEventListener("DOMContentLoaded", function () {
             await propagarRenomeacaoBanco(bancoAtual.nome, nome);
         }
 
-        // Só um banco pode ser "principal" por vez — desmarca qualquer
-        // outro que já estivesse marcado antes de salvar esse
-        if (principal) {
-            const lote = writeBatch(db);
-            let mudouAlgo = false;
-            listaDeBancosReais.forEach((banco) => {
-                if (banco.principal && banco.id !== bancoRealEmEdicaoId) {
-                    lote.update(doc(db, "usuarios", uidAtual, "bancos", banco.id), { principal: false });
-                    mudouAlgo = true;
-                }
-            });
-            if (mudouAlgo) await lote.commit();
-        }
-
+        // "principal" NÃO é tocado aqui — fica exatamente como já estava
+        // (isso agora só muda em Configurações, de propósito, pra não ser
+        // fácil de alterar sem querer)
         if (bancoRealEmEdicaoId) {
-            await updateDoc(doc(db, "usuarios", uidAtual, "bancos", bancoRealEmEdicaoId), { nome, saldoInicial, principal });
+            await updateDoc(doc(db, "usuarios", uidAtual, "bancos", bancoRealEmEdicaoId), { nome, saldoInicial });
         } else {
-            await addDoc(collection(db, "usuarios", uidAtual, "bancos"), { nome, saldoInicial, principal });
+            await addDoc(collection(db, "usuarios", uidAtual, "bancos"), { nome, saldoInicial, principal: false });
         }
 
         botaoSalvarBancoReal.disabled = false;

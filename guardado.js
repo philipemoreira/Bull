@@ -82,6 +82,9 @@ document.addEventListener("DOMContentLoaded", function () {
     let todosOsDepositos = []; // todos os lançamentos de "Guardar Dinheiro" (pra somar por meta)
     let metaEmEdicaoId = null;
 
+    aplicarMascaraValor(campoValorMeta);
+    aplicarMascaraValor(campoValorRetirada);
+
     onAuthStateChanged(auth, (usuario) => {
         if (!usuario) {
             window.location.href = "index.html";
@@ -222,7 +225,7 @@ document.addEventListener("DOMContentLoaded", function () {
         metaEmEdicaoId = meta ? meta.id : null;
         tituloModalMeta.textContent = meta ? "Editar meta" : "Nova meta";
         campoNomeMeta.value = meta ? meta.nome : "";
-        campoValorMeta.value = meta && meta.valor ? meta.valor : "";
+        campoValorMeta.value = meta && meta.valor ? meta.valor.toFixed(2).replace(".", ",") : "";
         botaoRemoverMeta.hidden = !meta;
         mensagemAvisoMeta.classList.remove("visivel");
         fundoModalMeta.classList.add("aberto");
@@ -442,10 +445,34 @@ document.addEventListener("DOMContentLoaded", function () {
         fecharModalRetirada();
     });
 
-    // Converte texto digitado em número, aceitando vírgula ou ponto como
-    // separador decimal (os campos de valor viraram type="text" pra isso)
+    // Converte texto digitado em número — remove pontos (separador de
+    // milhar) antes de trocar a vírgula por ponto decimal
     function paraNumero(texto) {
-        return parseFloat(String(texto).replace(",", "."));
+        return parseFloat(String(texto).replace(/\./g, "").replace(",", "."));
+    }
+
+    // Aplica a máscara "tipo caixa eletrônico": os dígitos digitados
+    // entram sempre da direita pra esquerda (representando centavos), sem
+    // precisar digitar vírgula
+    function aplicarMascaraValor(input) {
+        function reformatar() {
+            const digitos = input.value.replace(/\D/g, "");
+            if (digitos === "") {
+                input.value = "";
+                return;
+            }
+            const centavos = parseInt(digitos, 10);
+            const reais = Math.floor(centavos / 100);
+            const centavosRestantes = centavos % 100;
+            input.value = `${reais},${String(centavosRestantes).padStart(2, "0")}`;
+        }
+        input.addEventListener("input", () => {
+            reformatar();
+            input.setSelectionRange(input.value.length, input.value.length);
+        });
+        input.addEventListener("focus", () => {
+            setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+        });
     }
 
     function formatarMoeda(valor) {

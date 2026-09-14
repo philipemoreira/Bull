@@ -33,10 +33,32 @@
 
             <a href="conta.html" class="botao-encerrar-sessao" style="margin-top: 10px;">Trocar E-mail/Senha</a>
 
+            <button type="button" class="botao-encerrar-sessao" id="botao-abrir-trocar-principal" style="margin-top: 10px;">
+                Trocar Banco Principal
+            </button>
+
             <button type="button" class="botao-encerrar-sessao" id="botao-sair" style="margin-top: 24px; border-color: var(--error); color: var(--error);">
                 Encerrar Sessão
             </button>
         </main>
+    </div>
+
+    <div class="fundo-modal" id="fundo-modal-trocar-principal">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Trocar banco principal</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-trocar-principal" aria-label="Fechar">✕</button>
+            </div>
+            <p class="texto-explicativo-guardado">O banco principal é o que aparece no "Saldo do Mês" da tela inicial. Trocar não move nenhum dinheiro — só troca qual saldo é exibido ali.</p>
+            <div class="campo">
+                <label for="campo-novo-banco-principal">Novo banco principal</label>
+                <select id="campo-novo-banco-principal"></select>
+            </div>
+            <div class="mensagem-aviso" id="mensagem-aviso-trocar-principal" role="alert"></div>
+            <button type="button" class="botao-enviar" id="botao-continuar-trocar-principal">
+                <span class="texto-botao">Continuar</span>
+            </button>
+        </div>
     </div>
 
     <div class="fundo-modal" id="fundo-modal-confirmar">
