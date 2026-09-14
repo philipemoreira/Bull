@@ -41,8 +41,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const listaItensCartao = document.getElementById("lista-itens-cartao");
     const itensCartaoVazio = document.getElementById("itens-cartao-vazio");
-    const listaItensProximoMes = document.getElementById("lista-itens-proximo-mes");
-    const itensProximoMesVazio = document.getElementById("itens-proximo-mes-vazio");
 
     const fundoModalPagarFatura = document.getElementById("fundo-modal-pagar-fatura");
     const botaoFecharPagarFatura = document.getElementById("botao-fechar-pagar-fatura");
@@ -121,6 +119,26 @@ document.addEventListener("DOMContentLoaded", function () {
         const ultimoDiaDoMes = new Date(ano, mes, 0).getDate();
         const diaFinal = Math.min(diaFechamento, ultimoDiaDoMes);
         return new Date(ano, mes - 1, diaFinal);
+    }
+
+    // A data de vencimento de uma fatura específica — se o dia de
+    // vencimento for MENOR que o de fechamento, o vencimento cai no mês
+    // seguinte ao fechamento (é assim que cartão de verdade funciona:
+    // fecha dia 20, vence dia 5 do mês que vem, por exemplo)
+    function dataDeVencimento(mesReferenciaFechamento, diaFechamento, diaVencimento) {
+        const dataFech = dataDeFechamento(mesReferenciaFechamento, diaFechamento);
+        let ano = dataFech.getFullYear();
+        let mes = dataFech.getMonth();
+        if (diaVencimento < diaFechamento) {
+            mes += 1;
+        }
+        const ultimoDiaDoMes = new Date(ano, mes + 1, 0).getDate();
+        const diaFinal = Math.min(diaVencimento, ultimoDiaDoMes);
+        return new Date(ano, mes, diaFinal);
+    }
+
+    function formatarDiaEMes(data) {
+        return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
     }
 
     // Uma fatura é considerada "fechada" (pronta pra pagar) a partir do
@@ -310,8 +328,10 @@ document.addEventListener("DOMContentLoaded", function () {
             return !faturaJaFechou(documento.data().mesReferencia, diaFechamento);
         });
 
+        // Só a fatura FECHADA aparece na lista — o que ainda está
+        // acumulando (itensDoProximoMes) continua guardado em memória, só
+        // pro cálculo do "Você já gastou" no card, sem lista própria
         renderizarListaDeItens(itensDeTodasAsFaturas, listaItensCartao, itensCartaoVazio);
-        renderizarListaDeItens(itensDoProximoMes, listaItensProximoMes, itensProximoMesVazio);
     }
 
     function nomeDoCartao(cartaoId) {
@@ -319,40 +339,71 @@ document.addEventListener("DOMContentLoaded", function () {
         return cartao ? cartao.nome : "Cartão removido";
     }
 
-    // Desenha uma lista de itens de fatura — usada tanto pro mês atual
-    // quanto pro mês seguinte, pra não duplicar o mesmo HTML duas vezes
     const NOMES_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
     function formatarMesReferencia(mesReferencia) {
         const [ano, mes] = mesReferencia.split("-");
         return `${NOMES_MESES[parseInt(mes, 10) - 1]}/${ano}`;
     }
 
-    function renderizarListaDeItens(itens, listaAlvo, elementoVazio) {
-        listaAlvo.innerHTML = "";
+    // Desenha a lista de itens agrupada por tipo (Fixos / Parcelados /
+    // Compras únicas), cada grupo ordenado cronologicamente por mês — sem
+    // isso, um item de um mês distante podia aparecer antes de um mais
+    // perto, dando a impressão errada de "pulo" no tempo
+    function renderizarListaDeItens(itens, containerAlvo, elementoVazio) {
+        containerAlvo.innerHTML = "";
         if (elementoVazio) elementoVazio.hidden = itens.length > 0;
 
-        itens.forEach((documento) => {
-            const dados = documento.data();
-            const badge = dados.origem === "parcelado"
-                ? `<span class="badge-parcela">Parcela ${dados.numeroParcela}/${dados.totalParcelas}</span>`
-                : (dados.origem === "avulsa" ? `<span class="badge-parcela">Compra única</span>` : `<span class="badge-parcela">Fixo</span>`);
-            const badgeCartaoHtml = `<span class="badge-cartao">${nomeDoCartao(dados.cartaoId)}</span>`;
+        const itensOrdenados = [...itens].sort((a, b) => a.data().mesReferencia.localeCompare(b.data().mesReferencia));
 
-            const item = document.createElement("li");
-            item.className = "item-conta";
-            item.innerHTML = `
-                <div class="info-conta">
-                    <div class="nome-conta">${dados.descricao}${badge}${badgeCartaoHtml}</div>
-                    <div class="meta-conta">${dados.pago ? "Já paga" : `Fatura de ${formatarMesReferencia(dados.mesReferencia)}`}</div>
-                </div>
-                <span class="valor-conta" style="color: ${dados.pago ? "var(--sucesso)" : "#F5D76E"};">${formatarMoeda(dados.valor)}</span>
-                <button class="botao-excluir-conta" data-id="${documento.id}" aria-label="Excluir item">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/>
-                    </svg>
-                </button>
-            `;
-            listaAlvo.appendChild(item);
+        const grupos = { fixo: [], parcelado: [], avulsa: [] };
+        itensOrdenados.forEach((documento) => {
+            const origem = documento.data().origem || "avulsa";
+            (grupos[origem] || grupos.avulsa).push(documento);
+        });
+
+        const nomesGrupos = { fixo: "Fixos", parcelado: "Parcelados", avulsa: "Compras únicas" };
+
+        Object.keys(nomesGrupos).forEach((chaveGrupo) => {
+            const itensDoGrupo = grupos[chaveGrupo];
+            if (itensDoGrupo.length === 0) return;
+
+            const secao = document.createElement("div");
+            secao.style.marginBottom = "18px";
+
+            const cabecalho = document.createElement("h4");
+            cabecalho.style.cssText = "font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin: 0 0 8px 4px;";
+            cabecalho.textContent = nomesGrupos[chaveGrupo];
+            secao.appendChild(cabecalho);
+
+            const lista = document.createElement("ul");
+            lista.className = "lista-contas";
+
+            itensDoGrupo.forEach((documento) => {
+                const dados = documento.data();
+                const badgeParcela = dados.origem === "parcelado"
+                    ? `<span class="badge-parcela">Parcela ${dados.numeroParcela}/${dados.totalParcelas}</span>`
+                    : "";
+                const badgeCartaoHtml = `<span class="badge-cartao">${nomeDoCartao(dados.cartaoId)}</span>`;
+
+                const item = document.createElement("li");
+                item.className = "item-conta";
+                item.innerHTML = `
+                    <div class="info-conta">
+                        <div class="nome-conta">${dados.descricao}${badgeParcela}${badgeCartaoHtml}</div>
+                        <div class="meta-conta">${dados.pago ? "Já paga" : `Fatura de ${formatarMesReferencia(dados.mesReferencia)}`}</div>
+                    </div>
+                    <span class="valor-conta" style="color: ${dados.pago ? "var(--sucesso)" : "#F5D76E"};">${formatarMoeda(dados.valor)}</span>
+                    <button class="botao-excluir-conta" data-id="${documento.id}" aria-label="Excluir item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/>
+                        </svg>
+                    </button>
+                `;
+                lista.appendChild(item);
+            });
+
+            secao.appendChild(lista);
+            containerAlvo.appendChild(secao);
         });
     }
 
@@ -397,7 +448,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     listaItensCartao.addEventListener("click", handlerCliqueListaItens);
-    listaItensProximoMes.addEventListener("click", handlerCliqueListaItens);
 
     // ==========================================================================
     // FATURAS — uma por cartão cadastrado
@@ -531,24 +581,42 @@ document.addEventListener("DOMContentLoaded", function () {
             .filter((documento) => documento.data().cartaoId === cartao.id);
 
         const itensFechados = todosOsItens.filter((documento) => faturaJaFechou(documento.data().mesReferencia, diaFechamento));
-        const itensAcumulando = todosOsItens.filter((documento) => !faturaJaFechou(documento.data().mesReferencia, diaFechamento));
+        const itensNaoFechados = todosOsItens.filter((documento) => !faturaJaFechou(documento.data().mesReferencia, diaFechamento));
+
+        // Entre os que ainda não fecharam, acha o mês mais PRÓXIMO — a
+        // fatura que está se formando de verdade agora. Um Gasto Fixo ou
+        // Parcelado já pré-cria várias ocorrências futuras de uma vez (até
+        // 12 meses à frente) — os itens de meses MAIS distantes que esse
+        // são só "agendados", ainda não contam como gasto de verdade
+        let proximoMesReferencia = null;
+        itensNaoFechados.forEach((documento) => {
+            const mesRef = documento.data().mesReferencia;
+            if (!proximoMesReferencia || mesRef < proximoMesReferencia) proximoMesReferencia = mesRef;
+        });
+        const itensAcumulandoAgora = itensNaoFechados.filter((documento) => documento.data().mesReferencia === proximoMesReferencia);
 
         const itensFechadosNaoPagos = itensFechados.filter((documento) => !documento.data().pago);
         const itensFechadosPagos = itensFechados.filter((documento) => documento.data().pago);
         const totalFechadoNaoPago = itensFechadosNaoPagos.reduce((soma, documento) => soma + documento.data().valor, 0);
         const totalFechadoPago = itensFechadosPagos.reduce((soma, documento) => soma + documento.data().valor, 0);
-        const totalAcumulando = itensAcumulando.reduce((soma, documento) => soma + documento.data().valor, 0);
+        const totalAcumulandoAgora = itensAcumulandoAgora.reduce((soma, documento) => soma + documento.data().valor, 0);
+
+        // Pra saber a data de fechamento/vencimento a mostrar: se tem
+        // fatura fechada esperando pagamento, mostra a dela (é a mais
+        // urgente); senão, mostra a da próxima que vai fechar
+        const mesReferenciaParaExibir = itensFechadosNaoPagos.length > 0
+            ? itensFechadosNaoPagos[0].data().mesReferencia
+            : proximoMesReferencia;
 
         return {
             itensFechadosNaoPagos,
             itensFechadosPagos,
             totalFechadoNaoPago,
             totalFechadoPago,
-            totalAcumulando,
-            // "Você já gastou" = tudo comprometido nesse momento, pago ou
-            // não, fechado ou ainda acumulando — representa o quanto do
-            // limite está em uso
-            totalGastoGeral: totalFechadoNaoPago + totalAcumulando
+            mesReferenciaParaExibir,
+            // "Você já gastou" = tudo fechado ainda não pago + só a fatura
+            // que está formando agora (não os meses agendados lá na frente)
+            totalGastoGeral: totalFechadoNaoPago + totalAcumulandoAgora
         };
     }
 
@@ -558,10 +626,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
         listaDeCartoes.forEach((cartao) => {
             const estado = calcularEstadoCartao(cartao);
+            const diaFechamento = cartao.diaFechamento || 1;
+            const diaVencimento = cartao.diaVencimento || diaFechamento;
 
-            const textoFechamento = `Fecha dia ${cartao.diaFechamento || "—"}`;
-            const textoVencimento = cartao.diaVencimento ? `Vence dia ${cartao.diaVencimento}` : "";
-            const textoDatas = [textoFechamento, textoVencimento].filter(Boolean).join(" · ");
+            let textoDatas = "Sem dia de fechamento definido";
+            if (estado.mesReferenciaParaExibir) {
+                const dataFech = dataDeFechamento(estado.mesReferenciaParaExibir, diaFechamento);
+                const dataVenc = dataDeVencimento(estado.mesReferenciaParaExibir, diaFechamento, diaVencimento);
+                textoDatas = `Fechamento: ${formatarDiaEMes(dataFech)} · Vencimento: ${formatarDiaEMes(dataVenc)}`;
+            }
 
             let blocoPagarHtml = "";
             if (estado.totalFechadoNaoPago > 0) {
