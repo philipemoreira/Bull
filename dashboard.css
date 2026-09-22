@@ -173,7 +173,7 @@ body {
     width: 100%;
     max-width: 720px;
     margin: 0 auto;
-    padding: 32px 24px 100px 24px;
+    padding: 32px 24px 130px 24px;
     animation: entrada-conteudo 0.4s ease both;
 }
 
@@ -429,6 +429,20 @@ body {
     color: var(--accent);
 }
 
+.botao-editar-item {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    transition: color 0.2s ease;
+}
+
+.botao-editar-item:hover {
+    color: var(--accent);
+}
+
 .lista-vazia {
     text-align: center;
     color: var(--text-muted);
@@ -613,7 +627,7 @@ body {
 .badge-parcela {
     display: inline-block;
     background-color: var(--accent);
-    color: #0A0A0A;
+    color: var(--sobre-acento);
     font-size: 11px;
     font-weight: 700;
     padding: 2px 8px;
@@ -783,13 +797,13 @@ body {
    ========================================================================== */
 .botao-adicionar {
     position: fixed;
-    bottom: 28px;
-    right: 28px;
+    bottom: 92px;
+    right: 24px;
     width: 58px;
     height: 58px;
     border-radius: 50%;
     background-color: var(--accent);
-    color: #0A0A0A;
+    color: var(--sobre-acento);
     border: none;
     font-size: 30px;
     line-height: 1;
@@ -1066,12 +1080,12 @@ body {
     }
 
     .conteudo-principal {
-        padding: 24px 16px 100px 16px;
+        padding: 24px 16px 126px 16px;
     }
 
     .botao-adicionar {
-        bottom: 20px;
-        right: 20px;
+        bottom: 84px;
+        right: 16px;
         width: 54px;
         height: 54px;
     }
@@ -1171,7 +1185,7 @@ body {
 
 .botao-salvar-inline {
     background-color: var(--accent);
-    color: #0A0A0A;
+    color: var(--sobre-acento);
     border: none;
     border-radius: 8px;
     padding: 0 18px;
@@ -1281,4 +1295,105 @@ body {
 
 .etiqueta-banco-principal[hidden] {
     display: none;
+}
+
+/* ==========================================================================
+   AÇÕES DO TOPO (botão de tema + hambúrguer lado a lado)
+   ========================================================================== */
+.acoes-topo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.botao-tema {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: none;
+    border: 1px solid var(--borda);
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.botao-tema:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.botao-tema .icone-tema-claro {
+    display: none;
+}
+
+:root[data-tema="claro"] .botao-tema .icone-tema-escuro {
+    display: none;
+}
+
+:root[data-tema="claro"] .botao-tema .icone-tema-claro {
+    display: block;
+}
+
+/* Sombras pensadas pra fundo escuro ficam quase invisíveis (ou erradas) em
+   fundo claro — aqui a gente troca só as que mais aparecem na tela */
+:root[data-tema="claro"] body {
+    background: var(--bg-deep);
+}
+
+:root[data-tema="claro"] .cartao-saldo-principal,
+:root[data-tema="claro"] .banner-salario {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+:root[data-tema="claro"] .botao-adicionar {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+/* ==========================================================================
+   BARRA DE NAVEGAÇÃO FIXA EMBAIXO
+   Fica sempre visível, com os destinos mais usados — o resto (Cartões,
+   Lembretes, Configurações) continua a um toque de distância no "Mais",
+   que abre o mesmo painel lateral de sempre.
+   ========================================================================== */
+.nav-inferior {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    background-color: var(--surface);
+    border-top: 1px solid var(--borda);
+    padding: 8px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    z-index: 600;
+}
+
+.item-nav-inferior {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 0 4px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-family: var(--fonte-corpo);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.item-nav-inferior svg {
+    width: 22px;
+    height: 22px;
+}
+
+.item-nav-inferior:hover,
+.item-nav-inferior.ativo {
+    color: var(--accent);
 }

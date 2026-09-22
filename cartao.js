@@ -284,14 +284,30 @@ document.addEventListener("DOMContentLoaded", function () {
     botaoRemoverCartao.addEventListener("click", async () => {
         if (!cartaoEmEdicaoId) return;
         const confirmou = await confirmarComTelinha(
-            "Tem certeza de que deseja remover esse cartão? Os itens que já entraram em faturas continuam salvos no histórico.",
+            "Tem certeza de que deseja remover esse cartão? Todos os itens lançados nele (pagos ou não) serão apagados junto. Isso não afeta os valores que já viraram lançamento pago na sua conta.",
             "Remover cartão"
         );
         if (!confirmou) return;
 
-        await deleteDoc(doc(db, "usuarios", uidAtual, "cartoes", cartaoEmEdicaoId));
+        // Apaga junto todos os itens (pendências) que pertencem a esse cartão,
+        // pagos ou não — evita que fiquem "órfãos" (sem cartão, mas ainda
+        // contando em algum lugar) depois que o cartão some. O lançamento
+        // que já foi gerado ao pagar uma fatura (na coleção "lancamentos")
+        // e o registro em "faturasPagas" não são mexidos — o dinheiro que
+        // já saiu da conta continua registrado normalmente.
+        const consultaItensDoCartao = query(
+            collection(db, "usuarios", uidAtual, "pendencias"),
+            where("cartaoId", "==", cartaoEmEdicaoId)
+        );
+        const itensDoCartao = await getDocs(consultaItensDoCartao);
+
+        const lote = writeBatch(db);
+        itensDoCartao.forEach((documento) => lote.delete(documento.ref));
+        lote.delete(doc(db, "usuarios", uidAtual, "cartoes", cartaoEmEdicaoId));
+        await lote.commit();
+
         fundoModalCartao.classList.remove("aberto");
-        mostrarToast("Cartão removido");
+        mostrarToast("Cartão e itens removidos");
     });
 
     // ==========================================================================

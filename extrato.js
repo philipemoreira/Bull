@@ -212,9 +212,11 @@ document.addEventListener("DOMContentLoaded", function () {
         const botao = evento.target.closest(".botao-excluir");
         if (!botao) return;
 
-        // Itens do cofrinho ("Guardar Dinheiro") só podem ser excluídos pela
-        // tela "Saldo Guardado" — evita desbalancear o total guardado
-        if (botao.dataset.categoria === "Guardar Dinheiro") {
+        // Itens do cofrinho ("Guardar Dinheiro") e o lançamento irmão que
+        // devolve o valor pro saldo ("Retirada da Reserva") só podem ser
+        // excluídos pela tela "Saldo Guardado" — excluir só um dos dois
+        // por aqui desbalancearia o total guardado ou o saldo principal
+        if (botao.dataset.categoria === "Guardar Dinheiro" || botao.dataset.categoria === "Retirada da Reserva") {
             window.alert("Esse lançamento faz parte do seu Saldo Guardado. Pra excluir ou ajustar, vai em Saldo Guardado no menu lateral.");
             return;
         }
