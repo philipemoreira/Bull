@@ -283,44 +283,6 @@ document.addEventListener("DOMContentLoaded", function () {
         uidAtual = usuario.uid;
         emailUsuario.textContent = usuario.email;
 
-        // ==========================================================================
-        // DIAGNÓSTICO TEMPORÁRIO — mostra na tela todos os itens de cartão
-        // (pendencias com noCartao=true) pra investigar o bug da fatura
-        // duplicada. REMOVER depois de resolver.
-        // ==========================================================================
-        (async () => {
-            try {
-                const referenciaDiag = collection(db, "usuarios", uidAtual, "pendencias");
-                const consultaDiag = query(referenciaDiag, where("noCartao", "==", true));
-                const resultadoDiag = await getDocs(consultaDiag);
-
-                const linhas = [];
-                resultadoDiag.forEach((documento) => {
-                    const d = documento.data();
-                    linhas.push(
-                        `id: ${documento.id}\n` +
-                        `  descricao: ${d.descricao}\n` +
-                        `  valor: ${d.valor}\n` +
-                        `  mesReferencia: ${d.mesReferencia}\n` +
-                        `  cartaoId: ${d.cartaoId}\n` +
-                        `  pago: ${d.pago}\n` +
-                        `  origem: ${d.origem}\n` +
-                        `  diaDoMes: ${d.diaDoMes}\n` +
-                        `  grupoId: ${d.grupoId || "-"}`
-                    );
-                });
-
-                const painel = document.createElement("div");
-                painel.style.cssText = "position:fixed; top:0; left:0; right:0; bottom:0; background:#111; color:#0f0; font-family:monospace; font-size:13px; white-space:pre-wrap; padding:16px; z-index:99999; overflow:auto;";
-                painel.innerHTML = `<button id="fechar-diagnostico" style="position:fixed; top:10px; right:10px; padding:8px 14px; font-size:14px; z-index:100000;">Fechar</button>` +
-                    `<div style="margin-top:40px;">DIAGNÓSTICO — itens de cartão (pendencias, noCartao=true)\nTotal encontrado: ${resultadoDiag.size}\n\n${linhas.join("\n\n") || "(nenhum item encontrado)"}</div>`;
-                document.body.appendChild(painel);
-                document.getElementById("fechar-diagnostico").addEventListener("click", () => painel.remove());
-            } catch (erroDiag) {
-                console.error("Diagnóstico falhou:", erroDiag);
-            }
-        })();
-
         // Busca do perfil isolada num try/catch — se essa consulta falhar
         // por uma instabilidade de rede bem na abertura do app (o momento
         // mais comum pra isso acontecer), a gente NÃO quer que o app fique
@@ -380,6 +342,7 @@ document.addEventListener("DOMContentLoaded", function () {
         await carregarComSeguranca("resumo de bancos", atualizarResumoBancos);
         escutarSaldoBancoPrincipal();
         await carregarComSeguranca("cartões", carregarCartoes);
+        escutarResumoFaturaCartoes();
         if (!perfil.migracaoMesReferenciaConcluida) {
             await carregarComSeguranca("migração de lançamentos antigos", migrarLancamentosAntigos);
         }
@@ -1453,6 +1416,25 @@ document.addEventListener("DOMContentLoaded", function () {
         return mesReferenciaString(proximoMes);
     }
 
+    // As duas funções abaixo são cópias das mesmas de cartao.js — o
+    // resumo "Fatura Cartões de Crédito" da tela inicial PRECISA concordar
+    // com o que a tela do Cartão mostra, então usa exatamente a mesma
+    // lógica de fechamento (nada de comparar "mesReferencia" com o mês
+    // sendo navegado no calendário, que são conceitos diferentes — ver
+    // comentário em escutarResumoFaturaCartoes mais abaixo)
+    function dataDeFechamento(mesReferenciaFatura, diaFechamento) {
+        const [ano, mes] = mesReferenciaFatura.split("-").map(Number);
+        const ultimoDiaDoMes = new Date(ano, mes, 0).getDate();
+        const diaFinal = Math.min(diaFechamento, ultimoDiaDoMes);
+        return new Date(ano, mes - 1, diaFinal);
+    }
+
+    function faturaJaFechou(mesReferenciaFatura, diaFechamento) {
+        const hoje = new Date();
+        const hojeSoData = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+        return hojeSoData >= dataDeFechamento(mesReferenciaFatura, diaFechamento);
+    }
+
     atalhoHoje.addEventListener("click", () => {
         campoData.value = formatarDataParaCampo(new Date());
     });
@@ -2025,25 +2007,73 @@ document.addEventListener("DOMContentLoaded", function () {
     function escutarPendenciasDoMes() {
         if (pararDeEscutarPendencias) pararDeEscutarPendencias();
 
+        // Só pendências NORMAIS aqui (gasto fixo/parcelado pago em banco) —
+        // pra essas, "mesReferencia" é mesmo o mês do calendário, então
+        // filtrar pelo mês sendo navegado faz sentido. Itens de CARTÃO
+        // (noCartao=true) NÃO entram nessa consulta — "mesReferencia" pra
+        // eles é o CICLO da fatura (pode ser o mês que vem, se a compra foi
+        // depois do fechamento), um conceito diferente de "mês navegado no
+        // calendário". Eles têm a própria consulta, em escutarResumoFaturaCartoes.
         const mesReferencia = `${mesSelecionado.getFullYear()}-${String(mesSelecionado.getMonth() + 1).padStart(2, "0")}`;
         const referencia = collection(db, "usuarios", uidAtual, "pendencias");
-        const consulta = query(referencia, where("mesReferencia", "==", mesReferencia));
+        const consulta = query(referencia, where("mesReferencia", "==", mesReferencia), where("noCartao", "==", false));
 
         pararDeEscutarPendencias = onSnapshot(consulta, (snapshot) => {
             const documentosOrdenados = [...snapshot.docs].sort((a, b) => a.data().diaDoMes - b.data().diaDoMes);
-            renderizarPendencias(documentosOrdenados);
+            renderizarListaPendenciasNormais(documentosOrdenados);
         });
     }
 
-    function renderizarPendencias(documentos) {
-        // Separa em dois grupos: pendências normais (continuam do jeito de
-        // sempre) e as que estão "No Cartão" (não têm botão de marcar pago
-        // individual — só a Fatura inteira pode ser marcada como paga)
-        const pendenciasNormais = documentos.filter((documento) => !documento.data().noCartao);
-        const pendenciasNoCartao = documentos.filter((documento) => documento.data().noCartao);
+    // ==========================================================================
+    // RESUMO "FATURA CARTÕES DE CRÉDITO" — usa EXATAMENTE a mesma lógica de
+    // fechamento da tela do Cartão (calcularEstadoCartao em cartao.js), pra
+    // nunca mais mostrar um valor diferente do que aparece lá. Antes, esse
+    // resumo somava pendências de cartão filtrando só por "mesReferencia ==
+    // mês navegado no calendário" — só que "mesReferencia" de um item de
+    // cartão é o CICLO da fatura (pode já ser o mês que vem, se a compra foi
+    // feita depois do dia de fechamento), não o mês do calendário. Isso
+    // fazia esse resumo somar itens que não tinham nada a ver com a fatura
+    // atual, ou deixar de somar a fatura certa — dependendo do dia do mês
+    // ==========================================================================
+    let pararDeEscutarResumoFaturaCartoes = null;
 
-        renderizarListaPendenciasNormais(pendenciasNormais);
-        renderizarFaturaCartao(pendenciasNoCartao);
+    function escutarResumoFaturaCartoes() {
+        if (pararDeEscutarResumoFaturaCartoes) pararDeEscutarResumoFaturaCartoes();
+
+        const referencia = collection(db, "usuarios", uidAtual, "pendencias");
+        const consulta = query(referencia, where("noCartao", "==", true));
+
+        pararDeEscutarResumoFaturaCartoes = onSnapshot(consulta, (snapshot) => {
+            const todosOsItens = snapshot.docs;
+            let totalGeral = 0;
+
+            // Um cartão por vez, do mesmo jeito que calcularEstadoCartao faz
+            // em cartao.js — cada cartão tem seu próprio dia de fechamento,
+            // então não dá pra somar tudo junto sem separar primeiro
+            cartoesCustomizados.forEach((cartao) => {
+                const diaFechamento = cartao.diaFechamento || 1;
+                const itensDoCartao = todosOsItens.filter((documento) => documento.data().cartaoId === cartao.id);
+
+                const itensFechados = itensDoCartao.filter((documento) => faturaJaFechou(documento.data().mesReferencia, diaFechamento));
+                const itensNaoFechados = itensDoCartao.filter((documento) => !faturaJaFechou(documento.data().mesReferencia, diaFechamento));
+
+                let proximoMesReferencia = null;
+                itensNaoFechados.forEach((documento) => {
+                    const mesRef = documento.data().mesReferencia;
+                    if (!proximoMesReferencia || mesRef < proximoMesReferencia) proximoMesReferencia = mesRef;
+                });
+                const itensAcumulandoAgora = itensNaoFechados.filter((documento) => documento.data().mesReferencia === proximoMesReferencia);
+
+                const totalFechadoNaoPago = itensFechados
+                    .filter((documento) => !documento.data().pago)
+                    .reduce((soma, documento) => soma + documento.data().valor, 0);
+                const totalAcumulandoAgora = itensAcumulandoAgora.reduce((soma, documento) => soma + documento.data().valor, 0);
+
+                totalGeral += totalFechadoNaoPago + totalAcumulandoAgora;
+            });
+
+            renderizarFaturaCartao(totalGeral);
+        });
     }
 
     const LIMITE_PENDENCIAS_RECOLHIDO = 3;
@@ -2192,19 +2222,17 @@ document.addEventListener("DOMContentLoaded", function () {
         secaoFaturaCartao.hidden = linkResumoFatura.hidden && linkResumoBancos.hidden;
     }
 
-    function renderizarFaturaCartao(pendenciasNoCartao) {
-        if (pendenciasNoCartao.length === 0) {
+    // Recebe o total já calculado (fatura fechada não paga + fatura
+    // acumulando agora, somado de todos os cartões) — a mesma conta que a
+    // tela do Cartão faz pra cada cartão individualmente
+    function renderizarFaturaCartao(totalFatura) {
+        if (totalFatura <= 0) {
             linkResumoFatura.hidden = true;
             atualizarVisibilidadeSecaoBancosCartoes();
             return;
         }
         linkResumoFatura.hidden = false;
         atualizarVisibilidadeSecaoBancosCartoes();
-
-        const itensNaoPagos = pendenciasNoCartao.filter((documento) => !documento.data().pago);
-        const faturaEstaPaga = itensNaoPagos.length === 0;
-        const itensRelevantes = faturaEstaPaga ? pendenciasNoCartao : itensNaoPagos;
-        const totalFatura = itensRelevantes.reduce((soma, documento) => soma + documento.data().valor, 0);
 
         // Combina o total de TODOS os cartões cadastrados — o detalhe de cada
         // um (nome, vencimento, fatura própria) fica na tela do Cartão
