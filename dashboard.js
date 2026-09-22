@@ -283,6 +283,44 @@ document.addEventListener("DOMContentLoaded", function () {
         uidAtual = usuario.uid;
         emailUsuario.textContent = usuario.email;
 
+        // ==========================================================================
+        // DIAGNÓSTICO TEMPORÁRIO — mostra na tela todos os itens de cartão
+        // (pendencias com noCartao=true) pra investigar o bug da fatura
+        // duplicada. REMOVER depois de resolver.
+        // ==========================================================================
+        (async () => {
+            try {
+                const referenciaDiag = collection(db, "usuarios", uidAtual, "pendencias");
+                const consultaDiag = query(referenciaDiag, where("noCartao", "==", true));
+                const resultadoDiag = await getDocs(consultaDiag);
+
+                const linhas = [];
+                resultadoDiag.forEach((documento) => {
+                    const d = documento.data();
+                    linhas.push(
+                        `id: ${documento.id}\n` +
+                        `  descricao: ${d.descricao}\n` +
+                        `  valor: ${d.valor}\n` +
+                        `  mesReferencia: ${d.mesReferencia}\n` +
+                        `  cartaoId: ${d.cartaoId}\n` +
+                        `  pago: ${d.pago}\n` +
+                        `  origem: ${d.origem}\n` +
+                        `  diaDoMes: ${d.diaDoMes}\n` +
+                        `  grupoId: ${d.grupoId || "-"}`
+                    );
+                });
+
+                const painel = document.createElement("div");
+                painel.style.cssText = "position:fixed; top:0; left:0; right:0; bottom:0; background:#111; color:#0f0; font-family:monospace; font-size:13px; white-space:pre-wrap; padding:16px; z-index:99999; overflow:auto;";
+                painel.innerHTML = `<button id="fechar-diagnostico" style="position:fixed; top:10px; right:10px; padding:8px 14px; font-size:14px; z-index:100000;">Fechar</button>` +
+                    `<div style="margin-top:40px;">DIAGNÓSTICO — itens de cartão (pendencias, noCartao=true)\nTotal encontrado: ${resultadoDiag.size}\n\n${linhas.join("\n\n") || "(nenhum item encontrado)"}</div>`;
+                document.body.appendChild(painel);
+                document.getElementById("fechar-diagnostico").addEventListener("click", () => painel.remove());
+            } catch (erroDiag) {
+                console.error("Diagnóstico falhou:", erroDiag);
+            }
+        })();
+
         // Busca do perfil isolada num try/catch — se essa consulta falhar
         // por uma instabilidade de rede bem na abertura do app (o momento
         // mais comum pra isso acontecer), a gente NÃO quer que o app fique
