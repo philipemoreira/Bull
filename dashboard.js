@@ -10,24 +10,8 @@ const CATEGORIAS_PADRAO = {
     ganho: ["Outros"]
 };
 
-// Cores fixas por categoria no gráfico de gastos — cada categoria sempre
-// cai na mesma cor (calculada a partir do próprio nome), então "Mercado"
-// é sempre a mesma cor em qualquer mês, em vez de mudar conforme o ranking
-// de quem gastou mais. "Guardado" tem cor própria reservada, igual ao
-// pontinho usado pra ele no resto do app.
-const PALETA_CATEGORIAS = [
-    "#3987E5", "#D95926", "#199E70", "#C98500", "#9085E9",
-    "#D55181", "#E66767", "#5EEAD4", "#F5D76E", "#34D399"
-];
-
-function corDaCategoria(nomeCategoria) {
-    if (nomeCategoria === "Guardado") return "#60A5FA";
-    let hash = 0;
-    for (let i = 0; i < nomeCategoria.length; i++) {
-        hash = (hash * 31 + nomeCategoria.charCodeAt(i)) >>> 0;
-    }
-    return PALETA_CATEGORIAS[hash % PALETA_CATEGORIAS.length];
-}
+// Cores usadas no gráfico de gastos por categoria (cicla se tiver mais categorias que cores)
+const PALETA_GRAFICO = ["#D4D4D4", "#34D399", "#60A5FA", "#F5D76E", "#C084FC", "#F87171", "#5EEAD4", "#FDBA74"];
 
 const NOMES_MESES = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -54,8 +38,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const overlayMenu = document.getElementById("overlay-menu");
     const painelMenu = document.getElementById("painel-menu");
     const botaoFecharMenuLateral = document.getElementById("botao-fechar-menu-lateral");
-    const botaoTema = document.getElementById("botao-tema");
-    const botaoMaisNavInferior = document.getElementById("botao-mais-nav-inferior");
 
     const anoAnteriorBtn = document.getElementById("ano-anterior");
     const anoProximoBtn = document.getElementById("ano-proximo");
@@ -390,38 +372,6 @@ document.addEventListener("DOMContentLoaded", function () {
     botaoHamburguer.addEventListener("click", abrirMenuLateral);
     botaoFecharMenuLateral.addEventListener("click", fecharMenuLateral);
     overlayMenu.addEventListener("click", fecharMenuLateral);
-    if (botaoMaisNavInferior) {
-        botaoMaisNavInferior.addEventListener("click", abrirMenuLateral);
-    }
-
-    // ==========================================================================
-    // TEMA CLARO / ESCURO — só troca a aparência, nada de dados. A escolha
-    // fica salva no aparelho (localStorage), não na conta, então cada
-    // aparelho lembra o tema dele.
-    // ==========================================================================
-    const CHAVE_TEMA = "bull_tema";
-    const metaCorTema = document.querySelector('meta[name="theme-color"]');
-
-    function atualizarMetaCorTema() {
-        if (!metaCorTema) return;
-        const estaClaro = document.documentElement.getAttribute("data-tema") === "claro";
-        metaCorTema.setAttribute("content", estaClaro ? "#FAF9F5" : "#0A0A0A");
-    }
-    atualizarMetaCorTema();
-
-    if (botaoTema) {
-        botaoTema.addEventListener("click", () => {
-            const estaClaro = document.documentElement.getAttribute("data-tema") === "claro";
-            if (estaClaro) {
-                document.documentElement.removeAttribute("data-tema");
-                localStorage.setItem(CHAVE_TEMA, "escuro");
-            } else {
-                document.documentElement.setAttribute("data-tema", "claro");
-                localStorage.setItem(CHAVE_TEMA, "claro");
-            }
-            atualizarMetaCorTema();
-        });
-    }
 
     // ==========================================================================
     // 5. NAVEGAÇÃO ENTRE MESES E ANOS (com limite até dezembro do ano corrente)
@@ -3055,7 +3005,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         categorias.forEach((item, indice) => {
             const percentual = item.valor / totalGeral;
-            const cor = corDaCategoria(item.nome);
+            const cor = item.nome === "Guardado" ? "#60A5FA" : PALETA_GRAFICO[indice % PALETA_GRAFICO.length];
             const comprimentoFatia = percentual * circunferencia;
 
             const circulo = document.createElementNS("http://www.w3.org/2000/svg", "circle");
