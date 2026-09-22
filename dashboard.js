@@ -283,13 +283,23 @@ document.addEventListener("DOMContentLoaded", function () {
         uidAtual = usuario.uid;
         emailUsuario.textContent = usuario.email;
 
-        const perfilSnapshot = await getDoc(doc(db, "usuarios", uidAtual));
-        if (!perfilSnapshot.exists() || perfilSnapshot.data().onboardingCompleto !== true) {
-            window.location.href = "onboarding.html";
-            return;
+        // Busca do perfil isolada num try/catch — se essa consulta falhar
+        // por uma instabilidade de rede bem na abertura do app (o momento
+        // mais comum pra isso acontecer), a gente NÃO quer que o app fique
+        // travado numa tela em branco pra sempre: segue com um perfil vazio
+        // (só perde nome/salário por essa sessão) em vez de travar tudo
+        let perfil = {};
+        try {
+            const perfilSnapshot = await getDoc(doc(db, "usuarios", uidAtual));
+            if (!perfilSnapshot.exists() || perfilSnapshot.data().onboardingCompleto !== true) {
+                window.location.href = "onboarding.html";
+                return;
+            }
+            perfil = perfilSnapshot.data();
+        } catch (erro) {
+            console.error("Bull: falha ao carregar o perfil na abertura do app —", erro);
         }
 
-        const perfil = perfilSnapshot.data();
         primeiroNome = (perfil.nome || "").trim().split(" ")[0] || "";
         salarioPadrao = perfil.salarioPadrao || 0;
 
@@ -298,18 +308,44 @@ document.addEventListener("DOMContentLoaded", function () {
         const ehDiarista = Array.isArray(perfil.profissoes) && perfil.profissoes.includes("Diarista");
         botaoEscolhaExtra.textContent = ehDiarista ? "Ganho" : "Extra";
 
-        await carregarCategoriasCustomizadas();
-        await carregarOrcamentos();
-        await carregarMetas();
-        await carregarBancos();
-        await atualizarResumoBancos();
-        escutarSaldoBancoPrincipal();
-        await carregarCartoes();
-        if (!perfil.migracaoMesReferenciaConcluida) await migrarLancamentosAntigos();
+        // ESSENCIAL PRIMEIRO — mostra o mês e os lançamentos/pendências
+        // imediatamente ao abrir o app, sem depender de mais nada. Antes,
+        // isso só rodava DEPOIS de uma sequência de "await" em cascata
+        // (categorias, orçamentos, metas, bancos, cartões...): se qualquer
+        // um desses falhasse (rede instável logo na abertura do PWA, por
+        // exemplo), o erro não tratado interrompia a cadeia e a tela
+        // ficava vazia — só voltava a funcionar quando a pessoa trocava de
+        // mês, porque aí esse mesmo bloco rodava de novo (via mudarPeriodo)
+        // isolado do resto. Rodando isso primeiro, sem depender de nada
+        // secundário, a tela principal nunca fica em branco.
         atualizarRotuloMes();
         escutarLancamentosDoMes();
         escutarPendenciasDoMes();
         buscarGastosMesAnterior();
+
+        // Dados secundários (categorias, orçamentos, metas, bancos,
+        // cartões...) — cada um isolado num try/catch, pra um erro em
+        // qualquer um deles não travar os outros. Antes, um "await" que
+        // falhasse aqui impedia até o código essencial acima de rodar.
+        async function carregarComSeguranca(nomeParaLog, funcao) {
+            try {
+                await funcao();
+            } catch (erro) {
+                console.error(`Bull: falha ao carregar "${nomeParaLog}" na abertura do app —`, erro);
+            }
+        }
+
+        await carregarComSeguranca("categorias customizadas", carregarCategoriasCustomizadas);
+        await carregarComSeguranca("orçamentos", carregarOrcamentos);
+        await carregarComSeguranca("metas", carregarMetas);
+        await carregarComSeguranca("bancos", carregarBancos);
+        await carregarComSeguranca("resumo de bancos", atualizarResumoBancos);
+        escutarSaldoBancoPrincipal();
+        await carregarComSeguranca("cartões", carregarCartoes);
+        if (!perfil.migracaoMesReferenciaConcluida) {
+            await carregarComSeguranca("migração de lançamentos antigos", migrarLancamentosAntigos);
+        }
+
         verificarConselhoMensal(perfil);
         verificarAniversario(perfil);
         verificarPendenciasAntigas();
