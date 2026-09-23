@@ -7,6 +7,29 @@ import {
 
 document.addEventListener("DOMContentLoaded", function () {
 
+    const botaoTema = document.getElementById("botao-tema");
+    const CHAVE_TEMA = "bull_tema";
+    const metaCorTema = document.querySelector('meta[name="theme-color"]');
+    function atualizarMetaCorTema() {
+        if (!metaCorTema) return;
+        const temaClaro = document.documentElement.getAttribute("data-tema") === "claro";
+        metaCorTema.setAttribute("content", temaClaro ? "#FAF9F5" : "#0A0A0A");
+    }
+    atualizarMetaCorTema();
+    if (botaoTema) {
+        botaoTema.addEventListener("click", () => {
+            const estaClaro = document.documentElement.getAttribute("data-tema") === "claro";
+            if (estaClaro) {
+                document.documentElement.removeAttribute("data-tema");
+                try { localStorage.setItem(CHAVE_TEMA, "escuro"); } catch (erro) { /* localStorage bloqueado */ }
+            } else {
+                document.documentElement.setAttribute("data-tema", "claro");
+                try { localStorage.setItem(CHAVE_TEMA, "claro"); } catch (erro) { /* localStorage bloqueado */ }
+            }
+            atualizarMetaCorTema();
+        });
+    }
+
     const listaBancosReais = document.getElementById("lista-bancos-reais");
     const bancosReaisVazio = document.getElementById("bancos-reais-vazio");
     const botaoAbrirNovoBancoReal = document.getElementById("botao-abrir-novo-banco-real");
