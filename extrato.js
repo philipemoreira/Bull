@@ -6,6 +6,35 @@ import {
 
 document.addEventListener("DOMContentLoaded", function () {
 
+    // ==========================================================================
+    // TEMA CLARO / ESCURO — só troca a aparência, nada de dados. A escolha
+    // fica salva no aparelho (localStorage), a mesma usada em todas as telas.
+    // ==========================================================================
+    const botaoTema = document.getElementById("botao-tema");
+    const CHAVE_TEMA = "bull_tema";
+    const metaCorTema = document.querySelector('meta[name="theme-color"]');
+
+    function atualizarMetaCorTema() {
+        if (!metaCorTema) return;
+        const estaClaro = document.documentElement.getAttribute("data-tema") === "claro";
+        metaCorTema.setAttribute("content", estaClaro ? "#FAF9F5" : "#0A0A0A");
+    }
+    atualizarMetaCorTema();
+
+    if (botaoTema) {
+        botaoTema.addEventListener("click", () => {
+            const estaClaro = document.documentElement.getAttribute("data-tema") === "claro";
+            if (estaClaro) {
+                document.documentElement.removeAttribute("data-tema");
+                localStorage.setItem(CHAVE_TEMA, "escuro");
+            } else {
+                document.documentElement.setAttribute("data-tema", "claro");
+                localStorage.setItem(CHAVE_TEMA, "claro");
+            }
+            atualizarMetaCorTema();
+        });
+    }
+
     const listaExtrato = document.getElementById("lista-extrato");
     const toast = document.getElementById("toast");
     const toastMensagem = document.getElementById("toast-mensagem");

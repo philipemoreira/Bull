@@ -6,7 +6,13 @@
 }
 
 .conteudo-principal {
-    padding-bottom: 40px;
+    padding-bottom: 130px;
+}
+
+@media (max-width: 600px) {
+    .conteudo-principal {
+        padding-bottom: 126px;
+    }
 }
 
 .filtros-extrato {
@@ -68,7 +74,7 @@
 
 .botao-retirar:hover {
     background-color: var(--accent);
-    color: #0A0A0A;
+    color: var(--sobre-acento);
 }
 
 .campo-filtro {
@@ -99,6 +105,10 @@
 .campo-filtro input:focus {
     outline: none;
     border-color: var(--accent);
+}
+
+:root[data-tema="claro"] .campo-filtro input {
+    color-scheme: light;
 }
 
 .filtro-mes-wrapper {
