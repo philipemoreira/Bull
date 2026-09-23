@@ -396,6 +396,16 @@ document.addEventListener("DOMContentLoaded", function () {
         botaoMaisNavInferior.addEventListener("click", abrirMenuLateral);
     }
 
+    // Quando o "Mais" é clicado em outra tela (Extrato, Guardado, Cartões,
+    // Lembretes, Configurações), ela não tem o menu lateral construído — só
+    // existe aqui no Dashboard. Por isso o link delas manda pra cá com
+    // "?menu=1", e a gente abre o menu sozinho assim que a página carrega,
+    // em vez de deixar a pessoa cair sem querer na tela inicial.
+    if (new URLSearchParams(window.location.search).get("menu") === "1") {
+        abrirMenuLateral();
+        history.replaceState(null, "", window.location.pathname);
+    }
+
     // ==========================================================================
     // TEMA CLARO / ESCURO — só troca a aparência, nada de dados. A escolha
     // fica salva no aparelho (localStorage), não na conta, então cada
@@ -2918,7 +2928,7 @@ document.addEventListener("DOMContentLoaded", function () {
             // pela tela "Saldo Guardado" — excluir daqui, sem querer, deixava
             // o total do cofrinho desbalanceado (podendo até ficar negativo)
             if (dadosDoItem && dadosDoItem.categoria === "Guardar Dinheiro") {
-                window.alert("Esse lançamento faz parte do seu Saldo Guardado. Pra excluir ou ajustar, vai em Saldo Guardado no menu lateral.");
+                window.alert("Esse lançamento faz parte do seu Saldo Guardado. Pra excluir ou ajustar, vai na aba Guardado, embaixo.");
                 return;
             }
 
