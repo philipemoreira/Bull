@@ -249,9 +249,44 @@ body {
 
 .valor-saldo-grande {
     font-family: var(--fonte-titulo);
-    font-size: clamp(28px, 5vw, 38px);
+    font-size: clamp(30px, 5.5vw, 40px);
     font-weight: 600;
     color: var(--accent);
+}
+
+/* Ganhos/Gastos agora moram DENTRO do cartão de saldo — uma linha
+   discreta abaixo do valor grande, separada por uma linha fina. */
+.linha-resumo-saldo {
+    display: flex;
+    gap: 28px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--borda);
+}
+
+.item-resumo-saldo {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.rotulo-item-resumo {
+    font-size: 12.5px;
+    color: var(--text-muted);
+}
+
+.valor-item-resumo {
+    font-family: var(--fonte-titulo);
+    font-size: 16.5px;
+    font-weight: 700;
+}
+
+.valor-item-ganho {
+    color: var(--sucesso);
+}
+
+.valor-item-gasto {
+    color: var(--gasto-cor);
 }
 
 /* ==========================================================================
@@ -275,7 +310,7 @@ body {
 }
 
 .rotulo-cartao {
-    font-size: 12.5px;
+    font-size: 13.5px;
     font-weight: 600;
     color: var(--text-muted);
     text-transform: uppercase;
@@ -302,7 +337,7 @@ body {
    ========================================================================== */
 .titulo-secao {
     font-family: var(--fonte-titulo);
-    font-size: 17px;
+    font-size: 18.5px;
     font-weight: 600;
     margin: 0 0 14px 0;
 }
@@ -678,8 +713,8 @@ body {
 }
 
 .grafico-donut {
-    width: 120px;
-    height: 120px;
+    width: 132px;
+    height: 132px;
     flex-shrink: 0;
     transform: rotate(-90deg);
 }
@@ -735,7 +770,7 @@ body {
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: 13.5px;
 }
 
 .barra-orcamento-item {
@@ -793,30 +828,10 @@ body {
 }
 
 /* ==========================================================================
-   BOTÃO FLUTUANTE (ADICIONAR LANÇAMENTO)
+   BOTÃO DE ADICIONAR — agora mora dentro da própria barra de navegação,
+   elevado no centro (ver .item-nav-central mais abaixo), em vez de um
+   círculo solto flutuando por cima do conteúdo.
    ========================================================================== */
-.botao-adicionar {
-    position: fixed;
-    bottom: 92px;
-    right: 24px;
-    width: 58px;
-    height: 58px;
-    border-radius: 50%;
-    background-color: var(--accent);
-    color: var(--sobre-acento);
-    border: none;
-    font-size: 30px;
-    line-height: 1;
-    cursor: pointer;
-    box-shadow: 0 8px 24px rgba(255, 255, 255, 0.4);
-    transition: background-color 0.25s ease, transform 0.2s ease;
-    z-index: 500;
-}
-
-.botao-adicionar:hover {
-    background-color: var(--accent-hover);
-    transform: scale(1.05);
-}
 
 /* ==========================================================================
    MODAL DE NOVO LANÇAMENTO
@@ -1083,11 +1098,9 @@ body {
         padding: 24px 16px 126px 16px;
     }
 
-    .botao-adicionar {
-        bottom: 84px;
-        right: 16px;
-        width: 54px;
-        height: 54px;
+    .item-nav-central svg {
+        width: 22px;
+        height: 22px;
     }
 
     .modal-lancamento {
@@ -1112,17 +1125,67 @@ body {
     transition: border-color 0.2s ease;
 }
 
+/* Cartõezinhos individuais por banco — rolam na horizontal quando tem
+   mais de um banco cadastrado, ficam acima do resumo total */
+.lista-bancos-cards {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.lista-bancos-cards:not(:empty) {
+    margin-bottom: 12px;
+}
+
+.cartao-banco-preview {
+    flex: 0 0 auto;
+    width: 148px;
+    background-color: var(--surface);
+    border: 1px solid var(--borda);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.cartao-banco-preview:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.nome-banco-preview {
+    font-size: 12.5px;
+    color: var(--text-muted);
+}
+
+.saldo-banco-preview {
+    font-family: var(--fonte-titulo);
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
 .cartao-resumo-link[hidden] {
     display: none;
 }
 
 .cartao-resumo-link:hover {
     border-color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+:root[data-tema="claro"] .cartao-resumo-link:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 
 .cartao-resumo-titulo {
     display: block;
-    font-size: 13px;
+    font-size: 13.5px;
     color: var(--text-muted);
     margin-bottom: 4px;
 }
@@ -1130,7 +1193,7 @@ body {
 .cartao-resumo-valor {
     display: block;
     font-family: var(--fonte-titulo);
-    font-size: 20px;
+    font-size: 21px;
     font-weight: 600;
     color: var(--text-primary);
 }
@@ -1344,12 +1407,18 @@ body {
 }
 
 :root[data-tema="claro"] .cartao-saldo-principal,
-:root[data-tema="claro"] .banner-salario {
+:root[data-tema="claro"] .banner-salario,
+:root[data-tema="claro"] .fatura-cartao-item {
+    background: linear-gradient(160deg, #FFFFFF 0%, var(--surface-alta) 100%);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
 }
 
-:root[data-tema="claro"] .botao-adicionar {
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+:root[data-tema="claro"] .item-nav-central {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+}
+
+:root[data-tema="claro"] .nav-inferior {
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
 }
 
 /* ==========================================================================
@@ -1364,8 +1433,10 @@ body {
     right: 0;
     bottom: 0;
     display: flex;
+    align-items: center;
     background-color: var(--surface);
     border-top: 1px solid var(--borda);
+    border-radius: 20px 20px 0 0;
     padding: 8px 6px calc(6px + env(safe-area-inset-bottom, 0px));
     z-index: 600;
 }
@@ -1375,6 +1446,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 3px;
     padding: 6px 0 4px;
     background: none;
@@ -1382,18 +1454,43 @@ body {
     color: var(--text-muted);
     text-decoration: none;
     font-family: var(--fonte-corpo);
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 600;
     cursor: pointer;
     transition: color 0.2s ease;
 }
 
 .item-nav-inferior svg {
-    width: 22px;
-    height: 22px;
+    width: 23px;
+    height: 23px;
 }
 
 .item-nav-inferior:hover,
 .item-nav-inferior.ativo {
     color: var(--accent);
+}
+
+/* Botão de adicionar lançamento — elevado no centro da barra, em vez de
+   um círculo flutuando solto por cima do conteúdo da tela */
+.item-nav-central {
+    flex: 0 0 auto;
+    width: 54px;
+    height: 54px;
+    margin-top: -26px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    color: var(--sobre-acento);
+    box-shadow: 0 8px 20px rgba(255, 255, 255, 0.28);
+    transition: background-color 0.25s ease, transform 0.2s ease;
+}
+
+.item-nav-central svg {
+    width: 24px;
+    height: 24px;
+}
+
+.item-nav-central:hover {
+    background-color: var(--accent-hover);
+    color: var(--sobre-acento);
+    transform: scale(1.05);
 }

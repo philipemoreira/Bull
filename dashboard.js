@@ -50,7 +50,6 @@ document.addEventListener("DOMContentLoaded", function () {
     // ==========================================================================
     const emailUsuario = document.getElementById("email-usuario");
 
-    const botaoHamburguer = document.getElementById("botao-hamburguer");
     const overlayMenu = document.getElementById("overlay-menu");
     const painelMenu = document.getElementById("painel-menu");
     const botaoFecharMenuLateral = document.getElementById("botao-fechar-menu-lateral");
@@ -81,6 +80,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const linkResumoBancos = document.getElementById("link-resumo-bancos");
     const etiquetaBancoPrincipal = document.getElementById("etiqueta-banco-principal");
     const valorTotalBancos = document.getElementById("valor-total-bancos");
+    const listaBancosCards = document.getElementById("lista-bancos-cards");
     const linkExtrato = document.getElementById("link-extrato");
 
     const fundoModalEditarCategoria = document.getElementById("fundo-modal-editar-categoria");
@@ -390,7 +390,6 @@ document.addEventListener("DOMContentLoaded", function () {
         overlayMenu.classList.remove("aberto");
     }
 
-    botaoHamburguer.addEventListener("click", abrirMenuLateral);
     botaoFecharMenuLateral.addEventListener("click", fecharMenuLateral);
     overlayMenu.addEventListener("click", fecharMenuLateral);
     if (botaoMaisNavInferior) {
@@ -771,6 +770,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (snapshotBancos.empty) {
             linkResumoBancos.hidden = true;
+            if (listaBancosCards) listaBancosCards.innerHTML = "";
             atualizarVisibilidadeSecaoBancosCartoes();
             return;
         }
@@ -779,6 +779,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const snapshotLancamentos = await getDocs(referenciaLancamentos);
 
         let totalGeral = 0;
+        const bancosComSaldo = [];
         snapshotBancos.forEach((bancoDoc) => {
             const banco = bancoDoc.data();
             let saldoBanco = banco.saldoInicial || 0;
@@ -805,7 +806,26 @@ document.addEventListener("DOMContentLoaded", function () {
             });
 
             totalGeral += saldoBanco;
+            bancosComSaldo.push({ nome: banco.nome, saldo: saldoBanco });
         });
+
+        // Cartõezinhos individuais por banco, um do lado do outro, roláveis —
+        // só faz sentido mostrar quando tem mais de um banco cadastrado
+        if (listaBancosCards) {
+            listaBancosCards.innerHTML = "";
+            if (bancosComSaldo.length > 1) {
+                bancosComSaldo.forEach((banco) => {
+                    const card = document.createElement("a");
+                    card.href = "cartao.html";
+                    card.className = "cartao-banco-preview";
+                    card.innerHTML = `
+                        <span class="nome-banco-preview">${banco.nome}</span>
+                        <span class="saldo-banco-preview">${formatarMoeda(banco.saldo)}</span>
+                    `;
+                    listaBancosCards.appendChild(card);
+                });
+            }
+        }
 
         linkResumoBancos.hidden = false;
         valorTotalBancos.textContent = formatarMoeda(totalGeral);
