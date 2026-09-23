@@ -4,18 +4,26 @@
     padding: 0;
     background-color: var(--surface);
     border: 1px solid var(--borda);
-    border-radius: 10px;
+    border-radius: 14px;
     overflow: hidden;
 }
 
 .item-conta {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
+    gap: 14px;
+    padding: 15px 16px;
     border-bottom: 1px solid var(--borda);
     cursor: pointer;
     animation: entrada-item-lista 0.3s ease both;
+    transition: background-color 0.15s ease;
+}
+
+/* Selo colorido igual ao das listas de lançamento — só aparece em
+   Pagamentos Pendentes, que tem categoria de verdade (lembretes e metas
+   não têm, então continuam sem selo, pra não inventar cor à toa) */
+.ponto-categoria-conta {
+    color: var(--cor-categoria-item, var(--gasto-cor));
 }
 
 @keyframes entrada-item-lista {
@@ -119,7 +127,7 @@
 }
 
 .nome-conta {
-    font-size: 14.5px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
 }
@@ -139,7 +147,7 @@
 .valor-conta {
     font-family: var(--fonte-titulo);
     font-weight: 600;
-    font-size: 15px;
+    font-size: 15.5px;
     color: var(--sucesso);
     white-space: nowrap;
 }

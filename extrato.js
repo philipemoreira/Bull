@@ -4,6 +4,22 @@ import {
     collection, addDoc, deleteDoc, doc, query, orderBy, onSnapshot, Timestamp, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// Mesma paleta e mesmo cálculo de cor por categoria do Dashboard — repetido
+// aqui (não dá pra importar entre esses arquivos soltos) pra categoria
+// aparecer com a MESMA cor em toda tela, sempre.
+const PALETA_CATEGORIAS = [
+    "#3987E5", "#D95926", "#199E70", "#C98500", "#9085E9",
+    "#D55181", "#E66767", "#5EEAD4", "#F5D76E", "#34D399"
+];
+function corDaCategoria(nomeCategoria) {
+    if (nomeCategoria === "Guardado") return "#60A5FA";
+    let hash = 0;
+    for (let i = 0; i < nomeCategoria.length; i++) {
+        hash = (hash * 31 + nomeCategoria.charCodeAt(i)) >>> 0;
+    }
+    return PALETA_CATEGORIAS[hash % PALETA_CATEGORIAS.length];
+}
+
 document.addEventListener("DOMContentLoaded", function () {
 
     // ==========================================================================
@@ -184,6 +200,9 @@ document.addEventListener("DOMContentLoaded", function () {
             const item = document.createElement("li");
             item.className = `item-lancamento tipo-${dados.tipo}${dados.categoria === "Guardar Dinheiro" ? " tipo-cofre" : ""}`;
             item._dadosOriginais = dados;
+            if (dados.tipo === "gasto") {
+                item.style.setProperty("--cor-categoria-item", corDaCategoria(dados.categoria));
+            }
 
             const ehCofrinho = dados.categoria === "Guardar Dinheiro";
             const tituloGrande = ehCofrinho

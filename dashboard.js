@@ -2303,7 +2303,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const item = document.createElement("li");
         item.className = "item-conta";
+        item.style.setProperty("--cor-categoria-item", corDaCategoria(dados.categoria));
         item.innerHTML = `
+            <span class="ponto-categoria ponto-categoria-conta"></span>
             <div class="info-conta">
                 <div class="nome-conta">${dados.descricao}${badgeParcela}${badgeQuaseAcabando}</div>
                 <div class="meta-conta">${dados.categoria} · Vence dia ${dados.diaDoMes}</div>
@@ -2855,6 +2857,9 @@ document.addEventListener("DOMContentLoaded", function () {
             const item = document.createElement("li");
             item.className = `item-lancamento tipo-${dados.tipo}${dados.categoria === "Guardar Dinheiro" ? " tipo-cofre" : ""}`;
             item.dataset.id = documento.id;
+            if (dados.tipo === "gasto") {
+                item.style.setProperty("--cor-categoria-item", corDaCategoria(dados.categoria));
+            }
 
             // Pra depósitos do cofrinho, o título grande mostra a meta (é o
             // que realmente identifica "o que é" aquilo) em vez do nome

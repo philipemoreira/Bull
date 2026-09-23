@@ -348,18 +348,19 @@ body {
     padding: 0;
     background-color: var(--surface);
     border: 1px solid var(--borda);
-    border-radius: 10px;
+    border-radius: 14px;
     overflow: hidden;
 }
 
 .item-lancamento {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
+    gap: 14px;
+    padding: 15px 16px;
     border-bottom: 1px solid var(--borda);
     cursor: pointer;
     animation: entrada-item-lista 0.3s ease both;
+    transition: background-color 0.15s ease;
 }
 
 .item-lancamento:last-child {
@@ -375,19 +376,48 @@ body {
     to { opacity: 1; }
 }
 
+/* Cada lançamento ganha um "chip" redondo com um pontinho no meio, na cor
+   da categoria (a mesma do gráfico de pizza) — em vez de um pontinho seco
+   solto no canto, fica parecido com o selo colorido que apps de banco usam
+   pra identificar rapidinho o tipo de cada transação. */
 .ponto-categoria {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: relative;
+    color: var(--gasto-cor);
+}
+
+.ponto-categoria::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background-color: currentColor;
+    opacity: 0.14;
+}
+
+.ponto-categoria::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    flex-shrink: 0;
+    background-color: currentColor;
+    transform: translate(-50%, -50%);
 }
 
 .item-lancamento.tipo-ganho .ponto-categoria {
-    background-color: var(--sucesso);
+    color: var(--sucesso);
 }
 
+/* Gasto usa a cor da própria categoria (definida via variável inline pelo
+   JS, igual ao gráfico) — cai pro vermelho padrão se não tiver nenhuma */
 .item-lancamento.tipo-gasto .ponto-categoria {
-    background-color: var(--gasto-cor);
+    color: var(--cor-categoria-item, var(--gasto-cor));
 }
 
 .info-lancamento {
@@ -396,7 +426,7 @@ body {
 }
 
 .descricao-lancamento {
-    font-size: 14.5px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;
@@ -413,7 +443,7 @@ body {
 .valor-lancamento {
     font-family: var(--fonte-titulo);
     font-weight: 600;
-    font-size: 15px;
+    font-size: 15.5px;
     white-space: nowrap;
 }
 
@@ -429,7 +459,7 @@ body {
    pra não se confundir com ganho/gasto comuns na lista. Vem depois de
    propósito, pra vencer a cor padrão de tipo-ganho/tipo-gasto */
 .item-lancamento.tipo-cofre .ponto-categoria {
-    background-color: #60A5FA;
+    color: #60A5FA;
 }
 
 .item-lancamento.tipo-cofre .valor-lancamento {
@@ -482,7 +512,10 @@ body {
     text-align: center;
     color: var(--text-muted);
     font-size: 14px;
-    padding: 32px 16px;
+    padding: 28px 16px;
+    background-color: var(--surface);
+    border: 1px dashed var(--borda);
+    border-radius: 14px;
 }
 
 .botao-ver-extrato {
@@ -701,8 +734,8 @@ body {
 .cartao-grafico {
     background-color: var(--surface);
     border: 1px solid var(--borda);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 14px;
+    padding: 22px 20px;
     display: flex;
     align-items: center;
     gap: 20px;
@@ -802,7 +835,7 @@ body {
 .grafico-vazio {
     background-color: var(--surface);
     border: 1px solid var(--borda);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 24px;
     text-align: center;
     color: var(--text-muted);
@@ -1119,8 +1152,8 @@ body {
     justify-content: space-between;
     background-color: var(--surface);
     border: 1px solid var(--borda);
-    border-radius: 12px;
-    padding: 16px 18px;
+    border-radius: 14px;
+    padding: 17px 18px;
     text-decoration: none;
     transition: border-color 0.2s ease;
 }
@@ -1283,7 +1316,7 @@ body {
 .fatura-cartao-item {
     background: linear-gradient(160deg, var(--surface) 0%, #181818 100%);
     border: 1px solid var(--borda);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 18px;
     margin-bottom: 12px;
 }
