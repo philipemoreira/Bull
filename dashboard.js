@@ -346,6 +346,9 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!perfil.migracaoMesReferenciaConcluida) {
             await carregarComSeguranca("migração de lançamentos antigos", migrarLancamentosAntigos);
         }
+        if (!perfil.migracaoNoCartaoConcluida) {
+            await carregarComSeguranca("migração de pendências sem campo noCartao", migrarPendenciasSemCampoNoCartao);
+        }
 
         verificarConselhoMensal(perfil);
         verificarAniversario(perfil);
@@ -488,6 +491,36 @@ document.addEventListener("DOMContentLoaded", function () {
         // login, o que ia ficando cada vez mais lento conforme o histórico
         // crescesse. Com a marca, roda de verdade só uma vez na vida.
         await setDoc(doc(db, "usuarios", uidAtual), { migracaoMesReferenciaConcluida: true }, { merge: true });
+    }
+
+    // ==========================================================================
+    // CORREÇÃO AUTOMÁTICA — pendências criadas antes de existir a função
+    // "Comprar no Cartão" nunca ganharam o campo "noCartao" (ele só passou a
+    // existir quando essa função foi criada). Sem esse campo, a consulta de
+    // "Pagamentos Pendentes" (que filtra noCartao == false) nunca encontra
+    // esses itens antigos — mesmo sendo gasto fixo/parcelado normal, ficam
+    // invisíveis pra sempre. Roda uma vez por login: toda pendência sem o
+    // campo recebe noCartao: false (não tem outra opção que ela possa ser,
+    // já que "cartão" nem existia como conceito quando ela foi criada).
+    // ==========================================================================
+    async function migrarPendenciasSemCampoNoCartao() {
+        const referencia = collection(db, "usuarios", uidAtual, "pendencias");
+        const todasAsPendencias = await getDocs(referencia);
+
+        const semCampoNoCartao = todasAsPendencias.docs.filter((documento) => documento.data().noCartao === undefined);
+
+        if (semCampoNoCartao.length > 0) {
+            for (let inicio = 0; inicio < semCampoNoCartao.length; inicio += 450) {
+                const pedaco = semCampoNoCartao.slice(inicio, inicio + 450);
+                const lote = writeBatch(db);
+                pedaco.forEach((documento) => {
+                    lote.update(documento.ref, { noCartao: false });
+                });
+                await lote.commit();
+            }
+        }
+
+        await setDoc(doc(db, "usuarios", uidAtual), { migracaoNoCartaoConcluida: true }, { merge: true });
     }
 
     async function verificarPendenciasAntigas() {
