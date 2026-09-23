@@ -333,7 +333,7 @@ body#pagina-login {
 
 .aba-botao.ativa {
     background-color: var(--accent);
-    color: #0A0A0A;
+    color: var(--sobre-acento);
 }
 
 /* Mensagem de aviso/erro */
@@ -547,7 +547,7 @@ select:focus {
 .botao-enviar {
     width: 100%;
     background-color: var(--accent);
-    color: #0A0A0A;
+    color: var(--sobre-acento);
     border: none;
     border-radius: 8px;
     padding: 14px 0;
@@ -591,8 +591,8 @@ select:focus {
 .spinner-botao {
     width: 16px;
     height: 16px;
-    border: 2px solid rgba(10, 10, 10, 0.3);
-    border-top-color: #0A0A0A;
+    border: 2px solid rgba(128, 128, 128, 0.3);
+    border-top-color: var(--sobre-acento);
     border-radius: 50%;
     animation: girar-spinner 0.7s linear infinite;
 }
