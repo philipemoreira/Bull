@@ -1,7 +1,7 @@
 {
   "name": "Bull",
   "short_name": "Bull",
-  "description": "Controle de ganhos e gastos do dia a dia da família",
+  "description": "Controle de ganhos e gastos do seu dia a dia",
   "start_url": "index.html",
   "scope": ".",
   "display": "standalone",
@@ -20,6 +20,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "icone-mascaravel-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

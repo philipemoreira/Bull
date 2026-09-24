@@ -6,9 +6,13 @@ import {
     signOut,
     sendPasswordResetEmail,
     GoogleAuthProvider,
-    signInWithPopup
+    signInWithPopup,
+    deleteUser
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+    doc, getDoc, updateDoc, deleteDoc, deleteField,
+    collection, getDocs, writeBatch
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -31,6 +35,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoOlhoConfirmar = document.getElementById("botao-olho-confirmar");
     const linkEsqueciSenha = document.getElementById("link-esqueci-senha");
     const telaCarregamento = document.getElementById("tela-carregamento");
+
+    const fundoModalReativar = document.getElementById("fundo-modal-reativar");
+    const textoPrazoExclusao = document.getElementById("texto-prazo-exclusao");
+    const botaoReativarConta = document.getElementById("botao-reativar-conta");
+    const botaoSairSemReativar = document.getElementById("botao-sair-sem-reativar");
 
     // ==========================================================================
     // TELA DE CARREGAMENTO — com rede de segurança
@@ -131,6 +140,143 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function esconderAviso() {
         mensagemAviso.classList.remove("visivel", "sucesso");
+    }
+
+    // Vem do redirecionamento feito em Configurações, depois de agendar a
+    // exclusão da conta (ver configuracoes.js)
+    if (new URLSearchParams(window.location.search).get("contaExcluida") === "1") {
+        mostrarAviso("Sua conta foi marcada para exclusão em 7 dias. Se você entrar de novo antes disso, ela volta ao normal.", "sucesso");
+        history.replaceState(null, "", window.location.pathname);
+    }
+
+    // Considera "login recente" (interativo, feito agora) algo que aconteceu
+    // nos últimos 2 minutos — o suficiente pra diferenciar de uma sessão
+    // antiga que só foi restaurada sozinha ao abrir o app de novo. Isso
+    // importa só pra decidir se é seguro apagar a conta definitivamente
+    // (o Firebase exige um login recente de verdade pra isso).
+    function loginFoiRecente(usuario) {
+        const ultimoLogin = usuario.metadata && usuario.metadata.lastSignInTime
+            ? new Date(usuario.metadata.lastSignInTime).getTime()
+            : 0;
+        return (Date.now() - ultimoLogin) < 2 * 60 * 1000;
+    }
+
+    function formatarDataPtBr(data) {
+        return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+    }
+
+    const SUBCOLECOES_DO_USUARIO = ["lancamentos", "categorias", "metas", "pendencias", "anotacoes", "bancos", "cartoes", "faturasPagas", "orcamentos"];
+
+    // Apaga todos os documentos de uma subcoleção, em lotes de 400 (o limite
+    // do Firestore por lote é 500 — 400 dá uma folga de segurança)
+    async function apagarColecaoInteira(uid, nomeColecao) {
+        const instantaneo = await getDocs(collection(db, "usuarios", uid, nomeColecao));
+        const referencias = instantaneo.docs.map((documento) => documento.ref);
+        const TAMANHO_DO_LOTE = 400;
+        for (let i = 0; i < referencias.length; i += TAMANHO_DO_LOTE) {
+            const lote = writeBatch(db);
+            referencias.slice(i, i + TAMANHO_DO_LOTE).forEach((referencia) => lote.delete(referencia));
+            await lote.commit();
+        }
+    }
+
+    // ==========================================================================
+    // EXCLUSÃO DEFINITIVA — só roda quando o prazo de 7 dias já passou E o
+    // login que acabou de acontecer é recente de verdade (ver loginFoiRecente).
+    // Apaga todas as subcoleções, depois o documento de perfil, depois a
+    // conta no Firebase Auth. Se algo falhar no meio, desloga em vez de
+    // deixar a pessoa presa numa tela travada.
+    // ==========================================================================
+    async function apagarContaDefinitivamente(usuario) {
+        try {
+            for (const nomeColecao of SUBCOLECOES_DO_USUARIO) {
+                await apagarColecaoInteira(usuario.uid, nomeColecao);
+            }
+            await deleteDoc(doc(db, "usuarios", usuario.uid));
+            await deleteUser(usuario);
+        } catch (erro) {
+            try { await signOut(auth); } catch (erroAoDeslogar) { /* ignora */ }
+            esconderSplash();
+            mostrarAviso("Não deu pra concluir a exclusão agora. Tenta entrar de novo em instantes.");
+            return;
+        }
+        esconderSplash();
+        mostrarAviso("Sua conta e todos os seus dados foram apagados permanentemente. Obrigado por ter usado o Bull.", "sucesso");
+    }
+
+    // ==========================================================================
+    // Mostra a telinha de reativação — a pessoa logou numa conta marcada pra
+    // exclusão, mas ainda dentro do prazo de 7 dias.
+    // ==========================================================================
+    function abrirModalReativarConta(usuario, prazoExclusao, referenciaPerfil) {
+        textoPrazoExclusao.textContent = `Se você não fizer nada, seus dados vão ser apagados definitivamente em ${formatarDataPtBr(prazoExclusao)}. Quer reativar sua conta e continuar usando o Bull normalmente?`;
+        fundoModalReativar.classList.add("aberto");
+        botaoReativarConta.disabled = false;
+
+        function limpar() {
+            fundoModalReativar.classList.remove("aberto");
+            botaoReativarConta.removeEventListener("click", aoReativar);
+            botaoSairSemReativar.removeEventListener("click", aoSair);
+        }
+
+        async function aoReativar() {
+            botaoReativarConta.disabled = true;
+            try {
+                await updateDoc(referenciaPerfil, { exclusaoAgendadaPara: deleteField() });
+                limpar();
+                rotearAposLogin(usuario.uid);
+            } catch (erro) {
+                botaoReativarConta.disabled = false;
+                mostrarAviso("Não deu pra reativar agora. Confere sua internet e tenta de novo.");
+            }
+        }
+
+        async function aoSair() {
+            limpar();
+            await signOut(auth);
+        }
+
+        botaoReativarConta.addEventListener("click", aoReativar);
+        botaoSairSemReativar.addEventListener("click", aoSair);
+    }
+
+    // Evita rodar a checagem duas vezes pro mesmo login (o app tem dois
+    // caminhos que podem chamar isso quase ao mesmo tempo: o próprio
+    // onAuthStateChanged, e o redirecionamento manual depois do formulário
+    // de login — ver mais abaixo)
+    const uidsJaVerificadosParaExclusao = new Set();
+
+    async function verificarExclusaoAntesDeEntrar(usuario) {
+        if (uidsJaVerificadosParaExclusao.has(usuario.uid)) return;
+        uidsJaVerificadosParaExclusao.add(usuario.uid);
+
+        const referenciaPerfil = doc(db, "usuarios", usuario.uid);
+        const instantaneo = await getDoc(referenciaPerfil);
+        const dados = instantaneo.exists() ? instantaneo.data() : null;
+        const prazoExclusao = dados && dados.exclusaoAgendadaPara ? dados.exclusaoAgendadaPara.toDate() : null;
+
+        if (!prazoExclusao) {
+            rotearAposLogin(usuario.uid);
+            return;
+        }
+
+        if (new Date() < prazoExclusao) {
+            esconderSplash();
+            abrirModalReativarConta(usuario, prazoExclusao, referenciaPerfil);
+            return;
+        }
+
+        // O prazo já passou. Só apaga de vez se esse login foi de verdade
+        // recente — senão desloga e pede pra entrar de novo com a senha,
+        // porque o Firebase exige um login recente pra excluir a conta.
+        if (!loginFoiRecente(usuario)) {
+            await signOut(auth);
+            esconderSplash();
+            mostrarAviso("O prazo de exclusão da sua conta terminou. Entra de novo com e-mail e senha pra confirmarmos a exclusão definitiva.");
+            return;
+        }
+
+        await apagarContaDefinitivamente(usuario);
     }
 
     function traduzirErro(codigoErro) {
@@ -260,7 +406,7 @@ document.addEventListener("DOMContentLoaded", function () {
             mostrarAviso("Login realizado! Redirecionando...", "sucesso");
 
             setTimeout(() => {
-                rotearAposLogin(credencial.user.uid);
+                verificarExclusaoAntesDeEntrar(credencial.user);
             }, 700);
 
         } catch (erro) {
@@ -276,7 +422,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // formulário.
     onAuthStateChanged(auth, (usuario) => {
         if (usuario) {
-            rotearAposLogin(usuario.uid);
+            verificarExclusaoAntesDeEntrar(usuario);
         } else {
             esconderSplash();
         }

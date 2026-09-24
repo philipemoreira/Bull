@@ -12,6 +12,7 @@
 
     <link rel="stylesheet" href="variaveis.css">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dashboard.css">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0A0A0A">
     <link rel="apple-touch-icon" href="icone-192.png">
@@ -46,7 +47,7 @@
         <div class="painel-marca">
             <div class="conteudo-marca">
                 <span class="selo-marca">Bull</span>
-                <h1 class="titulo-marca">Cada centavo,<br>sob controle da família.</h1>
+                <h1 class="titulo-marca">Cada centavo,<br>sob seu controle.</h1>
                 <p class="texto-marca">Registre ganhos, gastos do dia a dia e descubra pra onde o dinheiro está indo — sem planilha complicada.</p>
 
                 <!-- Elemento assinatura: linha de crescimento que se desenha sozinha -->
@@ -151,6 +152,22 @@
         </div>
         <!-- fim do envelope -->
 
+    </div>
+
+    <!-- Aparece só quando a pessoa loga numa conta marcada pra exclusão, ainda
+         dentro do prazo de 7 dias — dá a chance de reativar em vez de perder
+         tudo. Ver a checagem em app.js, logo após o login. -->
+    <div class="fundo-modal" id="fundo-modal-reativar">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Sua conta está marcada para exclusão</h3>
+            </div>
+            <p id="texto-prazo-exclusao" style="color: var(--text-muted); font-size: 14px; line-height: 1.6; margin-bottom: 22px;"></p>
+            <button type="button" class="botao-enviar" id="botao-reativar-conta">
+                <span class="texto-botao">Reativar minha conta</span>
+            </button>
+            <button type="button" class="link-botao-simples" id="botao-sair-sem-reativar" style="display:block; margin: 16px auto 0;">Sair sem reativar</button>
+        </div>
     </div>
 
     <!-- app.js já importa o Firebase e a configuração internamente, por isso só ele precisa ser carregado aqui -->

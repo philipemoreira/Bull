@@ -1,6 +1,6 @@
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { collection, getDocs, doc, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, getDocs, doc, updateDoc, writeBatch, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -28,6 +28,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const botaoSair = document.getElementById("botao-sair");
+    const botaoExcluirConta = document.getElementById("botao-excluir-conta");
+    const DIAS_DE_GRACA_EXCLUSAO = 7;
 
     const fundoModalConfirmar = document.getElementById("fundo-modal-confirmar");
     const tituloModalConfirmar = document.getElementById("titulo-modal-confirmar");
@@ -82,6 +84,35 @@ document.addEventListener("DOMContentLoaded", function () {
 
         await signOut(auth);
         window.location.href = "index.html";
+    });
+
+    // ==========================================================================
+    // EXCLUIR CONTA — não apaga na hora: só agenda a exclusão pra daqui a 7
+    // dias e desloga. Se a pessoa entrar de novo antes desse prazo, a conta
+    // volta ao normal sozinha (ver app.js, que faz essa checagem no login).
+    // Só depois que o prazo passa é que os dados somem de vez.
+    // ==========================================================================
+    botaoExcluirConta.addEventListener("click", async () => {
+        const confirmou = await confirmarComTelinha(
+            `Sua conta vai ficar desativada por ${DIAS_DE_GRACA_EXCLUSAO} dias. Se você entrar de novo nesse período, ela volta ao normal automaticamente. Depois desse prazo, todos os seus dados são apagados de vez, sem volta. Quer continuar?`,
+            "Excluir conta"
+        );
+        if (!confirmou) return;
+
+        const dataExclusao = new Date();
+        dataExclusao.setDate(dataExclusao.getDate() + DIAS_DE_GRACA_EXCLUSAO);
+
+        botaoExcluirConta.disabled = true;
+        try {
+            await updateDoc(doc(db, "usuarios", uidAtual), {
+                exclusaoAgendadaPara: Timestamp.fromDate(dataExclusao)
+            });
+            await signOut(auth);
+            window.location.href = "index.html?contaExcluida=1";
+        } catch (erro) {
+            botaoExcluirConta.disabled = false;
+            await confirmarComTelinha("Não deu pra processar isso agora. Confere sua internet e tenta de novo.", "Ops");
+        }
     });
 
     // ==========================================================================

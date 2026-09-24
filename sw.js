@@ -6,7 +6,7 @@
 // dos arquivos principais.
 // ==========================================================================
 
-const NOME_DO_CACHE = "financas-familia-v136";
+const NOME_DO_CACHE = "financas-familia-v139";
 
 // Arquivos essenciais, guardados localmente no primeiro acesso
 const ARQUIVOS_ESSENCIAIS = [
@@ -30,6 +30,7 @@ const ARQUIVOS_ESSENCIAIS = [
     "manifest.json",
     "icone-192.png",
     "icone-512.png",
+    "icone-mascaravel-512.png",
     "favicon-32.png",
     "favicon-16.png"
 ];

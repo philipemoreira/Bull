@@ -1159,12 +1159,26 @@ body {
 }
 
 /* Cartõezinhos individuais por banco — rolam na horizontal quando tem
-   mais de um banco cadastrado, ficam acima do resumo total */
+   mais de um banco cadastrado, ficam acima do resumo total.
+   O padding-top existe pra sobrar espaço pro anel de foco do cartão (ver
+   .cartao-banco-preview:focus-visible mais abaixo) — sem essa folga, o
+   "overflow-x: auto" corta a parte de cima desse anel, e fica parecendo
+   uma linha branca cortada no topo do cartão.
+   A barra de rolagem nativa é escondida de propósito (webkit-scrollbar +
+   scrollbar-width) porque no celular ela aparecia flutuando por cima da
+   metade de baixo dos cartões em vez de ficar limpa embaixo — o próximo
+   cartão "espiando" na borda já deixa claro que dá pra arrastar pro lado,
+   sem precisar da barrinha. */
 .lista-bancos-cards {
     display: flex;
     gap: 12px;
     overflow-x: auto;
-    padding-bottom: 2px;
+    padding: 4px 2px 6px;
+    scrollbar-width: none;
+}
+
+.lista-bancos-cards::-webkit-scrollbar {
+    display: none;
 }
 
 .lista-bancos-cards:not(:empty) {
@@ -1188,6 +1202,19 @@ body {
 .cartao-banco-preview:hover {
     border-color: var(--accent);
     transform: translateY(-1px);
+}
+
+/* Troca o anel de foco padrão do navegador (que ficava cortado no topo
+   pelo overflow do carrossel) por um destaque próprio, que nunca
+   ultrapassa a borda do cartão */
+.cartao-banco-preview:focus {
+    outline: none;
+}
+
+.cartao-banco-preview:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent) inset;
 }
 
 .nome-banco-preview {
