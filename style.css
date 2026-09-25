@@ -765,3 +765,51 @@ select:focus {
         transform: none;
     }
 }
+
+/* ==========================================================================
+   MODO PRIVACIDADE
+   Quando ligado (botão de olho no topo, ver privacidade.js), borra todo
+   valor em R$ visível na tela — sem precisar mudar o texto de cada um,
+   então funciona mesmo com valores que mudam sozinhos (saldo em tempo
+   real, etc.). A lista de seletores abaixo cobre os valores das telas
+   principais (Dashboard, Extrato, Guardado, Bancos e Cartões, Lembretes).
+   ========================================================================== */
+html.privacidade-ativa .valor-saldo-grande,
+html.privacidade-ativa .valor-item-resumo,
+html.privacidade-ativa .valor-conta,
+html.privacidade-ativa .valor-lancamento,
+html.privacidade-ativa .saldo-banco-preview,
+html.privacidade-ativa .fatura-cartao-valor,
+html.privacidade-ativa .fatura-cartao-vencimento,
+html.privacidade-ativa .texto-barra-orcamento,
+html.privacidade-ativa .texto-pago-em,
+html.privacidade-ativa #valor-total-bancos,
+html.privacidade-ativa #total-guardado,
+html.privacidade-ativa #texto-disponivel-retirada,
+html.privacidade-ativa #texto-saldo-atual-banco,
+html.privacidade-ativa #saldo-com-lembretes,
+html.privacidade-ativa #comparacao-mes-anterior {
+    filter: blur(7px);
+    user-select: none;
+    transition: filter 0.15s ease;
+}
+
+/* Encostar o dedo/mouse em cima "espia" o valor por baixo do borrão —
+   útil pra conferir rapidinho sem precisar desligar o modo privacidade */
+html.privacidade-ativa .valor-saldo-grande:active,
+html.privacidade-ativa .valor-item-resumo:active,
+html.privacidade-ativa .valor-conta:active,
+html.privacidade-ativa .valor-lancamento:active,
+html.privacidade-ativa .saldo-banco-preview:active,
+html.privacidade-ativa .fatura-cartao-valor:active,
+html.privacidade-ativa .fatura-cartao-vencimento:active,
+html.privacidade-ativa .texto-barra-orcamento:active,
+html.privacidade-ativa .texto-pago-em:active,
+html.privacidade-ativa #valor-total-bancos:active,
+html.privacidade-ativa #total-guardado:active,
+html.privacidade-ativa #texto-disponivel-retirada:active,
+html.privacidade-ativa #texto-saldo-atual-banco:active,
+html.privacidade-ativa #saldo-com-lembretes:active,
+html.privacidade-ativa #comparacao-mes-anterior:active {
+    filter: blur(0);
+}

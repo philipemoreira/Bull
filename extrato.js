@@ -3,6 +3,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/f
 import {
     collection, addDoc, deleteDoc, doc, query, orderBy, onSnapshot, Timestamp, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { iniciarModoPrivacidade } from "./privacidade.js";
 
 // Mesma paleta e mesmo cálculo de cor por categoria do Dashboard — repetido
 // aqui (não dá pra importar entre esses arquivos soltos) pra categoria
@@ -29,6 +30,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoTema = document.getElementById("botao-tema");
     const CHAVE_TEMA = "bull_tema";
     const metaCorTema = document.querySelector('meta[name="theme-color"]');
+
+    iniciarModoPrivacidade();
 
     function atualizarMetaCorTema() {
         if (!metaCorTema) return;

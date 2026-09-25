@@ -4,6 +4,7 @@ import {
     collection, addDoc, updateDoc, setDoc, deleteDoc, doc, getDoc, getDocs,
     query, where, onSnapshot, Timestamp, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { iniciarModoPrivacidade } from "./privacidade.js";
 
 const CATEGORIAS_PADRAO = {
     gasto: ["Outros"],
@@ -55,6 +56,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoFecharMenuLateral = document.getElementById("botao-fechar-menu-lateral");
     const botaoTema = document.getElementById("botao-tema");
     const botaoMaisNavInferior = document.getElementById("botao-mais-nav-inferior");
+
+    iniciarModoPrivacidade();
 
     const anoAnteriorBtn = document.getElementById("ano-anterior");
     const anoProximoBtn = document.getElementById("ano-proximo");
@@ -1890,6 +1893,32 @@ document.addEventListener("DOMContentLoaded", function () {
                 const tipoTexto = ehParcelado ? "parcelamento" : "gasto fixo";
                 const nomeParaMensagem = campoDescricao.value.trim() || categoriaFinal;
                 const confirmouMesmoAssim = await confirmarComTelinha(`Parece que você já tem um ${tipoTexto} chamado "${nomeParaMensagem}" criado antes. Tem certeza de que deseja criar de novo?`);
+                if (!confirmouMesmoAssim) return;
+            }
+        }
+
+        // Detecta lançamento duplicado nos gastos/ganhos avulsos (não fixo,
+        // não parcelado, não cartão, não Guardado — esses já têm suas
+        // próprias checagens acima ou não fazem sentido aqui): mesmo valor,
+        // mesmo tipo e mesmo dia é um forte sinal de ter lançado 2x sem
+        // querer (ex: apertar salvar duas vezes, ou esquecer que já tinha
+        // lançado aquele gasto hoje mais cedo)
+        if (!ehParcelado && !campoFixo.checked && !noCartaoCredito && !modoGuardar) {
+            const dataParaChecarDuplicado = construirDataComHorarioReal(campoData.value);
+            const consultaDuplicado = query(
+                collection(db, "usuarios", uidAtual, "lancamentos"),
+                where("mesReferencia", "==", mesReferenciaString(mesSelecionado)),
+                where("valor", "==", valorDigitado),
+                where("tipo", "==", tipoSelecionado)
+            );
+            const resultadoDuplicado = await getDocs(consultaDuplicado);
+            const jaExisteDuplicado = resultadoDuplicado.docs.some((documento) => {
+                const dataExistente = documento.data().data?.toDate();
+                return dataExistente && dataExistente.toDateString() === dataParaChecarDuplicado.toDateString();
+            });
+
+            if (jaExisteDuplicado) {
+                const confirmouMesmoAssim = await confirmarComTelinha(`Já existe um lançamento de ${formatarMoeda(valorDigitado)} nesse mesmo dia. Tem certeza de que quer salvar mesmo assim?`);
                 if (!confirmouMesmoAssim) return;
             }
         }

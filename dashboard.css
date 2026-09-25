@@ -1429,7 +1429,8 @@ body {
     gap: 10px;
 }
 
-.botao-tema {
+.botao-tema,
+.botao-privacidade {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1443,9 +1444,19 @@ body {
     transition: border-color 0.2s ease, color 0.2s ease;
 }
 
-.botao-tema:hover {
+.botao-tema:hover,
+.botao-privacidade:hover {
     border-color: var(--accent);
     color: var(--accent);
+}
+
+/* Quando o Modo Privacidade está ligado, o botão de olho fica destacado
+   (fundo com a cor de acento) pra deixar bem claro que os valores estão
+   escondidos — não é só um detalhezinho fácil de esquecer ligado */
+html.privacidade-ativa .botao-privacidade {
+    background: var(--accent);
+    color: var(--sobre-acento);
+    border-color: var(--accent);
 }
 
 .botao-tema .icone-tema-claro {
