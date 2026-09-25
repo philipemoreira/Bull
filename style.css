@@ -767,49 +767,58 @@ select:focus {
 }
 
 /* ==========================================================================
-   MODO PRIVACIDADE
-   Quando ligado (botão de olho no topo, ver privacidade.js), borra todo
-   valor em R$ visível na tela — sem precisar mudar o texto de cada um,
-   então funciona mesmo com valores que mudam sozinhos (saldo em tempo
-   real, etc.). A lista de seletores abaixo cobre os valores das telas
-   principais (Dashboard, Extrato, Guardado, Bancos e Cartões, Lembretes).
+   MODO PRIVACIDADE (só no Dashboard — página inicial)
+   Quando ligado (botão de olho no topo, ver privacidade.js), troca o texto
+   dos valores por "••••••" — não é borrão, é o valor de verdade escondido
+   atrás de um texto por cima (::after), então funciona mesmo com valores
+   que mudam sozinhos (saldo em tempo real etc.) sem precisar reescrever
+   nada em JS. Cobre só: Saldo do mês, Ganhos, Gastos e a seção "Bancos e
+   Cartões" (saldo de cada banco + fatura) — o resto do app fica normal.
    ========================================================================== */
 html.privacidade-ativa .valor-saldo-grande,
 html.privacidade-ativa .valor-item-resumo,
-html.privacidade-ativa .valor-conta,
-html.privacidade-ativa .valor-lancamento,
-html.privacidade-ativa .saldo-banco-preview,
-html.privacidade-ativa .fatura-cartao-valor,
-html.privacidade-ativa .fatura-cartao-vencimento,
-html.privacidade-ativa .texto-barra-orcamento,
-html.privacidade-ativa .texto-pago-em,
-html.privacidade-ativa #valor-total-bancos,
-html.privacidade-ativa #total-guardado,
-html.privacidade-ativa #texto-disponivel-retirada,
-html.privacidade-ativa #texto-saldo-atual-banco,
-html.privacidade-ativa #saldo-com-lembretes,
-html.privacidade-ativa #comparacao-mes-anterior {
-    filter: blur(7px);
+html.privacidade-ativa #secao-fatura-cartao .saldo-banco-preview,
+html.privacidade-ativa #secao-fatura-cartao .cartao-resumo-valor {
+    position: relative;
+    color: transparent;
     user-select: none;
-    transition: filter 0.15s ease;
 }
 
-/* Encostar o dedo/mouse em cima "espia" o valor por baixo do borrão —
+html.privacidade-ativa .valor-saldo-grande::after,
+html.privacidade-ativa .valor-item-resumo::after,
+html.privacidade-ativa #secao-fatura-cartao .saldo-banco-preview::after,
+html.privacidade-ativa #secao-fatura-cartao .cartao-resumo-valor::after {
+    content: "••••••";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    color: var(--text-primary);
+    letter-spacing: 1px;
+}
+
+/* Ganhos/gastos mantêm a cor (verde/vermelho) nos pontinhos também, pra
+   não perder a leitura rápida de "isso é entrada, isso é saída" */
+html.privacidade-ativa .valor-item-ganho::after {
+    color: var(--sucesso);
+}
+
+html.privacidade-ativa .valor-item-gasto::after {
+    color: var(--gasto-cor);
+}
+
+/* Encostar o dedo/mouse em cima "espia" o valor de verdade por um instante —
    útil pra conferir rapidinho sem precisar desligar o modo privacidade */
 html.privacidade-ativa .valor-saldo-grande:active,
 html.privacidade-ativa .valor-item-resumo:active,
-html.privacidade-ativa .valor-conta:active,
-html.privacidade-ativa .valor-lancamento:active,
-html.privacidade-ativa .saldo-banco-preview:active,
-html.privacidade-ativa .fatura-cartao-valor:active,
-html.privacidade-ativa .fatura-cartao-vencimento:active,
-html.privacidade-ativa .texto-barra-orcamento:active,
-html.privacidade-ativa .texto-pago-em:active,
-html.privacidade-ativa #valor-total-bancos:active,
-html.privacidade-ativa #total-guardado:active,
-html.privacidade-ativa #texto-disponivel-retirada:active,
-html.privacidade-ativa #texto-saldo-atual-banco:active,
-html.privacidade-ativa #saldo-com-lembretes:active,
-html.privacidade-ativa #comparacao-mes-anterior:active {
-    filter: blur(0);
+html.privacidade-ativa #secao-fatura-cartao .saldo-banco-preview:active,
+html.privacidade-ativa #secao-fatura-cartao .cartao-resumo-valor:active {
+    color: inherit;
+}
+
+html.privacidade-ativa .valor-saldo-grande:active::after,
+html.privacidade-ativa .valor-item-resumo:active::after,
+html.privacidade-ativa #secao-fatura-cartao .saldo-banco-preview:active::after,
+html.privacidade-ativa #secao-fatura-cartao .cartao-resumo-valor:active::after {
+    content: "";
 }

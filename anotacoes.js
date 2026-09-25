@@ -4,7 +4,6 @@ import {
     collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, getDocs, getDoc, setDoc, writeBatch,
     query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { iniciarModoPrivacidade } from "./privacidade.js";
 
 const NOMES_MESES = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -12,8 +11,6 @@ const NOMES_MESES = [
 ];
 
 document.addEventListener("DOMContentLoaded", function () {
-
-    iniciarModoPrivacidade();
 
     const botaoTema = document.getElementById("botao-tema");
     const CHAVE_TEMA = "bull_tema";

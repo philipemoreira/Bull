@@ -4,11 +4,8 @@ import {
     collection, addDoc, updateDoc, deleteDoc, doc, getDoc, getDocs,
     query, where, onSnapshot, Timestamp, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { iniciarModoPrivacidade } from "./privacidade.js";
 
 document.addEventListener("DOMContentLoaded", function () {
-
-    iniciarModoPrivacidade();
 
     const botaoTema = document.getElementById("botao-tema");
     const CHAVE_TEMA = "bull_tema";
