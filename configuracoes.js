@@ -1,6 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { collection, getDocs, doc, updateDoc, writeBatch, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, getDocs, doc, updateDoc, writeBatch, Timestamp, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { suportaBiometria, biometriaAtiva, ativarBiometria, desativarBiometria } from "./biometria.js";
 
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -37,6 +38,15 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoConfirmarAcao = document.getElementById("botao-confirmar-acao");
     const botaoCancelarAcao = document.getElementById("botao-cancelar-acao");
     const botaoFecharConfirmar = document.getElementById("botao-fechar-confirmar");
+
+    const botaoAlternarBiometria = document.getElementById("botao-alternar-biometria");
+    const textoStatusBiometria = document.getElementById("texto-status-biometria");
+
+    const botaoAbrirHistoricoAcessos = document.getElementById("botao-abrir-historico-acessos");
+    const fundoModalHistoricoAcessos = document.getElementById("fundo-modal-historico-acessos");
+    const botaoFecharHistoricoAcessos = document.getElementById("botao-fechar-historico-acessos");
+    const listaHistoricoAcessos = document.getElementById("lista-historico-acessos");
+    const historicoAcessosVazio = document.getElementById("historico-acessos-vazio");
 
     const botaoAbrirTrocarPrincipal = document.getElementById("botao-abrir-trocar-principal");
     const fundoModalTrocarPrincipal = document.getElementById("fundo-modal-trocar-principal");
@@ -76,6 +86,61 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
         uidAtual = usuario.uid;
+        atualizarUiBiometria();
+    });
+
+    // ==========================================================================
+    // LOGIN COM BIOMETRIA — liga/desliga o "atalho" de digital/Face ID/PIN
+    // nesse aparelho. Ver biometria.js pra entender os limites (não troca
+    // o login de verdade, só acelera reaberturas no mesmo aparelho).
+    // ==========================================================================
+    async function atualizarUiBiometria() {
+        if (!uidAtual) return;
+
+        const suportado = await suportaBiometria();
+        if (!suportado) {
+            botaoAlternarBiometria.disabled = true;
+            textoStatusBiometria.textContent = "Esse aparelho ou navegador não tem suporte a biometria (digital, rosto ou PIN do sistema).";
+            return;
+        }
+
+        botaoAlternarBiometria.disabled = false;
+        const ativa = biometriaAtiva(uidAtual);
+        botaoAlternarBiometria.textContent = ativa ? "Desativar Login com Biometria" : "Ativar Login com Biometria";
+        textoStatusBiometria.textContent = ativa
+            ? "Ativado neste aparelho. Ao reabrir o Bull aqui, ele vai pedir sua digital, rosto ou PIN antes de entrar."
+            : "Depois de ativado, o Bull pede sua digital, rosto ou PIN do aparelho toda vez que você reabrir o app por aqui, sem precisar digitar a senha de novo. Só funciona neste aparelho/navegador — em um aparelho novo, o login continua sendo o normal.";
+    }
+
+    botaoAlternarBiometria.addEventListener("click", async () => {
+        const ativa = biometriaAtiva(uidAtual);
+
+        if (ativa) {
+            const confirmou = await confirmarComTelinha(
+                "Quer desativar o login com biometria neste aparelho? Você vai voltar a digitar sua senha normalmente ao abrir o app.",
+                "Desativar biometria"
+            );
+            if (!confirmou) return;
+            desativarBiometria(uidAtual);
+            atualizarUiBiometria();
+            return;
+        }
+
+        botaoAlternarBiometria.disabled = true;
+        try {
+            await ativarBiometria(uidAtual, auth.currentUser?.email, auth.currentUser?.displayName);
+            await confirmarComTelinha(
+                "Biometria ativada! Da próxima vez que você abrir o Bull neste aparelho, ele vai pedir sua digital, rosto ou PIN antes de entrar.",
+                "Tudo certo"
+            );
+        } catch (erro) {
+            await confirmarComTelinha(
+                "Não deu pra ativar a biometria agora. Confere se seu aparelho tem digital, Face ID ou PIN configurado no sistema e tenta de novo.",
+                "Ops"
+            );
+        } finally {
+            atualizarUiBiometria();
+        }
     });
 
     botaoSair.addEventListener("click", async () => {
@@ -113,6 +178,57 @@ document.addEventListener("DOMContentLoaded", function () {
             botaoExcluirConta.disabled = false;
             await confirmarComTelinha("Não deu pra processar isso agora. Confere sua internet e tenta de novo.", "Ops");
         }
+    });
+
+    // ==========================================================================
+    // HISTÓRICO DE ACESSOS — só leitura. Os registros são criados em app.js,
+    // toda vez que o app é aberto (uma vez por sessão do navegador).
+    // ==========================================================================
+    function formatarDataHoraAcesso(data) {
+        const dataFormatada = data.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+        const horaFormatada = data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+        return `${dataFormatada}, ${horaFormatada}`;
+    }
+
+    botaoAbrirHistoricoAcessos.addEventListener("click", async () => {
+        fundoModalHistoricoAcessos.classList.add("aberto");
+        listaHistoricoAcessos.innerHTML = "";
+        historicoAcessosVazio.hidden = true;
+
+        try {
+            const referenciaAcessos = collection(db, "usuarios", uidAtual, "acessos");
+            const resultado = await getDocs(query(referenciaAcessos, orderBy("criadoEm", "desc"), limit(20)));
+
+            if (resultado.empty) {
+                historicoAcessosVazio.hidden = false;
+                return;
+            }
+
+            resultado.docs.forEach((documento) => {
+                const dados = documento.data();
+                const dataAcesso = dados.criadoEm ? dados.criadoEm.toDate() : null;
+
+                const item = document.createElement("li");
+                item.className = "item-conta";
+                item.innerHTML = `
+                    <div class="info-conta">
+                        <div class="nome-conta">${dados.dispositivo || "Aparelho desconhecido"}</div>
+                        <div class="meta-conta">${dataAcesso ? formatarDataHoraAcesso(dataAcesso) : "Data não disponível"}</div>
+                    </div>
+                `;
+                listaHistoricoAcessos.appendChild(item);
+            });
+        } catch (erro) {
+            historicoAcessosVazio.textContent = "Não deu pra carregar o histórico agora. Confere sua internet e tenta de novo.";
+            historicoAcessosVazio.hidden = false;
+        }
+    });
+
+    botaoFecharHistoricoAcessos.addEventListener("click", () => {
+        fundoModalHistoricoAcessos.classList.remove("aberto");
+    });
+    fundoModalHistoricoAcessos.addEventListener("click", (evento) => {
+        if (evento.target === fundoModalHistoricoAcessos) fundoModalHistoricoAcessos.classList.remove("aberto");
     });
 
     // ==========================================================================

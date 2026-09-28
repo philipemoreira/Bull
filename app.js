@@ -11,8 +11,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
     doc, getDoc, updateDoc, deleteDoc, deleteField,
-    collection, getDocs, writeBatch
+    collection, getDocs, writeBatch, addDoc, query, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { suportaBiometria, biometriaAtiva, verificarBiometria } from "./biometria.js";
 
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -40,6 +41,18 @@ document.addEventListener("DOMContentLoaded", function () {
     const textoPrazoExclusao = document.getElementById("texto-prazo-exclusao");
     const botaoReativarConta = document.getElementById("botao-reativar-conta");
     const botaoSairSemReativar = document.getElementById("botao-sair-sem-reativar");
+
+    const telaBloqueioBiometria = document.getElementById("tela-bloqueio-biometria");
+    const botaoDesbloquearBiometria = document.getElementById("botao-desbloquear-biometria");
+    const mensagemAvisoBiometria = document.getElementById("mensagem-aviso-biometria");
+    const botaoUsarSenhaEmVez = document.getElementById("botao-usar-senha-em-vez");
+
+    // Fica "true" assim que a pessoa faz login de propósito nessa mesma
+    // abertura da página (digitou senha ou usou o Google) — nesse caso não
+    // faz sentido pedir biometria de novo na sequência, ela acabou de se
+    // identificar. A biometria só entra quando o Firebase RESTAURA uma
+    // sessão salva sozinho (app fechado e reaberto).
+    let loginFoiInterativoNestaAbertura = false;
 
     // ==========================================================================
     // TELA DE CARREGAMENTO — com rede de segurança
@@ -165,7 +178,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
     }
 
-    const SUBCOLECOES_DO_USUARIO = ["lancamentos", "categorias", "metas", "pendencias", "anotacoes", "bancos", "cartoes", "faturasPagas", "orcamentos"];
+    const SUBCOLECOES_DO_USUARIO = ["lancamentos", "categorias", "metas", "pendencias", "anotacoes", "bancos", "cartoes", "faturasPagas", "orcamentos", "acessos"];
 
     // Apaga todos os documentos de uma subcoleção, em lotes de 400 (o limite
     // do Firestore por lote é 500 — 400 dá uma folga de segurança)
@@ -246,6 +259,108 @@ document.addEventListener("DOMContentLoaded", function () {
     // de login — ver mais abaixo)
     const uidsJaVerificadosParaExclusao = new Set();
 
+    // ==========================================================================
+    // HISTÓRICO DE ACESSOS — registra data/hora + tipo de aparelho toda vez
+    // que o app é aberto (não a cada troca de tela, só uma vez por sessão do
+    // navegador, controlado pelo sessionStorage). Sem IP: o navegador não
+    // expõe isso pra gente, faria falta um servidor por trás pra capturar.
+    // Guarda só os últimos MAX_ACESSOS_GUARDADOS — o resto vai sendo apagado
+    // sozinho, pra não crescer pra sempre.
+    // ==========================================================================
+    const CHAVE_ACESSO_JA_REGISTRADO = "bull_acesso_registrado";
+    const MAX_ACESSOS_GUARDADOS = 20;
+
+    function detectarDispositivo() {
+        const ua = navigator.userAgent || "";
+
+        let navegador = "Navegador";
+        if (/Edg\//.test(ua)) navegador = "Edge";
+        else if (/OPR\//.test(ua)) navegador = "Opera";
+        else if (/Chrome\//.test(ua) && !/Chromium/.test(ua)) navegador = "Chrome";
+        else if (/Firefox\//.test(ua)) navegador = "Firefox";
+        else if (/Safari\//.test(ua) && /Version\//.test(ua)) navegador = "Safari";
+
+        let sistema = "";
+        if (/iPhone/.test(ua)) sistema = "iPhone";
+        else if (/iPad/.test(ua)) sistema = "iPad";
+        else if (/Android/.test(ua)) sistema = "Android";
+        else if (/Windows/.test(ua)) sistema = "Windows";
+        else if (/Mac OS X/.test(ua)) sistema = "Mac";
+        else if (/Linux/.test(ua)) sistema = "Linux";
+
+        return sistema ? `${navegador} · ${sistema}` : navegador;
+    }
+
+    async function registrarAcessoSeNecessario(uid) {
+        try {
+            if (sessionStorage.getItem(CHAVE_ACESSO_JA_REGISTRADO) === uid) return;
+            sessionStorage.setItem(CHAVE_ACESSO_JA_REGISTRADO, uid);
+        } catch (erro) {
+            // sessionStorage bloqueado (raro) — segue e registra mesmo assim
+        }
+
+        try {
+            const referenciaAcessos = collection(db, "usuarios", uid, "acessos");
+            await addDoc(referenciaAcessos, {
+                dispositivo: detectarDispositivo(),
+                criadoEm: serverTimestamp()
+            });
+
+            // Limpa o excesso, mantendo só os mais recentes
+            const todosOrdenados = await getDocs(query(referenciaAcessos, orderBy("criadoEm", "desc")));
+            if (todosOrdenados.docs.length > MAX_ACESSOS_GUARDADOS) {
+                const excedentes = todosOrdenados.docs.slice(MAX_ACESSOS_GUARDADOS);
+                await Promise.all(excedentes.map((documento) => deleteDoc(documento.ref)));
+            }
+        } catch (erro) {
+            // Não é crítico pro login — se falhar, só não fica esse registro,
+            // sem travar a entrada da pessoa no app
+        }
+    }
+
+    // ==========================================================================
+    // BLOQUEIO POR BIOMETRIA — só aparece se a pessoa ativou isso nesse
+    // aparelho (Configurações) E o login não foi interativo agora (ou seja,
+    // é uma sessão que o Firebase restaurou sozinho ao abrir o app de novo).
+    // Se a biometria falhar ou for cancelada, dá pra tentar de novo ou sair
+    // e entrar normalmente com a senha.
+    // ==========================================================================
+    function pedirDesbloqueioBiometrico(usuario, aoDesbloquear) {
+        telaBloqueioBiometria.hidden = false;
+        mensagemAvisoBiometria.textContent = "";
+        mensagemAvisoBiometria.classList.remove("visivel");
+
+        async function tentar() {
+            botaoDesbloquearBiometria.disabled = true;
+            mensagemAvisoBiometria.classList.remove("visivel");
+            try {
+                await verificarBiometria(usuario.uid);
+                limpar();
+                telaBloqueioBiometria.hidden = true;
+                aoDesbloquear();
+            } catch (erro) {
+                mensagemAvisoBiometria.textContent = "Não deu pra confirmar a biometria. Tenta de novo ou entra com sua senha.";
+                mensagemAvisoBiometria.classList.add("visivel");
+            } finally {
+                botaoDesbloquearBiometria.disabled = false;
+            }
+        }
+
+        async function usarSenha() {
+            limpar();
+            telaBloqueioBiometria.hidden = true;
+            await signOut(auth);
+        }
+
+        function limpar() {
+            botaoDesbloquearBiometria.removeEventListener("click", tentar);
+            botaoUsarSenhaEmVez.removeEventListener("click", usarSenha);
+        }
+
+        botaoDesbloquearBiometria.addEventListener("click", tentar);
+        botaoUsarSenhaEmVez.addEventListener("click", usarSenha);
+    }
+
     async function verificarExclusaoAntesDeEntrar(usuario) {
         if (uidsJaVerificadosParaExclusao.has(usuario.uid)) return;
         uidsJaVerificadosParaExclusao.add(usuario.uid);
@@ -256,6 +371,20 @@ document.addEventListener("DOMContentLoaded", function () {
         const prazoExclusao = dados && dados.exclusaoAgendadaPara ? dados.exclusaoAgendadaPara.toDate() : null;
 
         if (!prazoExclusao) {
+            const precisaBiometria = !loginFoiInterativoNestaAbertura
+                && biometriaAtiva(usuario.uid)
+                && await suportaBiometria();
+
+            if (precisaBiometria) {
+                esconderSplash();
+                pedirDesbloqueioBiometrico(usuario, async () => {
+                    await registrarAcessoSeNecessario(usuario.uid);
+                    rotearAposLogin(usuario.uid);
+                });
+                return;
+            }
+
+            await registrarAcessoSeNecessario(usuario.uid);
             rotearAposLogin(usuario.uid);
             return;
         }
@@ -347,6 +476,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // onAuthStateChanged lá embaixo, igual no login normal.
     // ==========================================================================
     botaoGoogle.addEventListener("click", async () => {
+        loginFoiInterativoNestaAbertura = true;
         const provedorGoogle = new GoogleAuthProvider();
         try {
             await signInWithPopup(auth, provedorGoogle);
@@ -362,6 +492,7 @@ document.addEventListener("DOMContentLoaded", function () {
     formulario.addEventListener("submit", async function (evento) {
         evento.preventDefault();
         esconderAviso();
+        loginFoiInterativoNestaAbertura = true;
 
         const email = campoEmail.value.trim();
         const senha = campoSenha.value;

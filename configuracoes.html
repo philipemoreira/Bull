@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="dashboard.css">
     <link rel="stylesheet" href="extrato.css">
+    <link rel="stylesheet" href="anotacoes.css">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0A0A0A">
     <link rel="apple-touch-icon" href="icone-192.png">
@@ -52,6 +53,15 @@
             </button>
 
             <a href="historico-faturas.html" class="botao-encerrar-sessao" style="margin-top: 10px;">Histórico de Faturas Pagas</a>
+
+            <button type="button" class="botao-encerrar-sessao" id="botao-abrir-historico-acessos" style="margin-top: 10px;">
+                Histórico de Acessos
+            </button>
+
+            <button type="button" class="botao-encerrar-sessao" id="botao-alternar-biometria" style="margin-top: 10px;">
+                Ativar Login com Biometria
+            </button>
+            <p class="texto-explicativo-guardado" id="texto-status-biometria" style="margin: 8px 2px 0;"></p>
 
             <button type="button" class="botao-encerrar-sessao" id="botao-sair" style="margin-top: 24px; border-color: var(--error); color: var(--error);">
                 Encerrar Sessão
@@ -97,6 +107,18 @@
             <button type="button" class="botao-enviar" id="botao-continuar-trocar-principal">
                 <span class="texto-botao">Continuar</span>
             </button>
+        </div>
+    </div>
+
+    <div class="fundo-modal" id="fundo-modal-historico-acessos">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Histórico de Acessos</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-historico-acessos" aria-label="Fechar">✕</button>
+            </div>
+            <p class="texto-explicativo-guardado">Últimas vezes que esse app foi aberto — data, hora e tipo de aparelho/navegador. Não guardamos IP nem localização.</p>
+            <ul class="lista-contas" id="lista-historico-acessos" style="max-height: 340px; overflow-y: auto;"></ul>
+            <p class="lista-vazia" id="historico-acessos-vazio" hidden>Nenhum acesso registrado ainda.</p>
         </div>
     </div>
 

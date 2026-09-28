@@ -154,6 +154,30 @@
 
     </div>
 
+    <!-- Aparece quando a pessoa ativou o login com biometria neste aparelho
+         (ver Configurações) e o Firebase restaura uma sessão salva sozinho
+         ao abrir o app — pede digital/Face ID/PIN antes de continuar. Não
+         aparece em login manual (senha ou Google), só na reabertura. -->
+    <div class="tela-bloqueio-biometria" id="tela-bloqueio-biometria" hidden>
+        <div class="conteudo-bloqueio-biometria">
+            <span class="selo-marca-carregamento">Bull</span>
+            <div class="icone-bloqueio-biometria">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <path d="M12 2a5 5 0 0 0-5 5v2M7 15v-3a5 5 0 0 1 10 0v3"/>
+                    <path d="M12 8a3 3 0 0 0-3 3v3a3 3 0 0 0 6 0"/>
+                    <path d="M9 18v-4a3 3 0 0 1 6 0v1"/>
+                    <path d="M15 20.5c.5-1 .8-2.2.8-3.5v-3"/>
+                </svg>
+            </div>
+            <p class="texto-bloqueio-biometria">Desbloqueie com sua digital, rosto ou PIN do aparelho pra continuar no Bull</p>
+            <button type="button" class="botao-enviar" id="botao-desbloquear-biometria">
+                <span class="texto-botao">Desbloquear</span>
+            </button>
+            <div class="mensagem-aviso" id="mensagem-aviso-biometria" role="alert"></div>
+            <button type="button" class="link-botao-simples" id="botao-usar-senha-em-vez">Entrar com senha em vez disso</button>
+        </div>
+    </div>
+
     <!-- Aparece só quando a pessoa loga numa conta marcada pra exclusão, ainda
          dentro do prazo de 7 dias — dá a chance de reativar em vez de perder
          tudo. Ver a checagem em app.js, logo após o login. -->

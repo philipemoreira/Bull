@@ -139,6 +139,64 @@ body#pagina-login {
 }
 
 /* ==========================================================================
+   TELA DE BLOQUEIO POR BIOMETRIA — só aparece se a pessoa ativou o login
+   com biometria nesse aparelho (Configurações) e o Firebase restaura uma
+   sessão salva sozinho ao abrir o app de novo (ver app.js).
+   ========================================================================== */
+.tela-bloqueio-biometria {
+    position: fixed;
+    inset: 0;
+    background-color: var(--bg-deep);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 24px;
+}
+
+.tela-bloqueio-biometria[hidden] {
+    display: none;
+}
+
+.conteudo-bloqueio-biometria {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    max-width: 300px;
+    text-align: center;
+}
+
+.icone-bloqueio-biometria {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    margin-top: 4px;
+}
+
+.texto-bloqueio-biometria {
+    color: var(--text-muted);
+    font-size: 15px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.conteudo-bloqueio-biometria .botao-enviar {
+    width: 100%;
+    margin-top: 4px;
+}
+
+.conteudo-bloqueio-biometria .mensagem-aviso {
+    margin: 0;
+}
+
+/* ==========================================================================
    ESTRUTURA GERAL DA TELA (duas colunas no desktop)
    ========================================================================== */
 .tela-login {
