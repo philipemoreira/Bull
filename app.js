@@ -46,6 +46,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoSairSemReativar = document.getElementById("botao-sair-sem-reativar");
 
     const telaBloqueioBiometria = document.getElementById("tela-bloqueio-biometria");
+    const telaBoasVindas = document.getElementById("tela-boas-vindas");
+    const botaoComecarLogado = document.getElementById("botao-comecar-logado");
     const botaoDesbloquearBiometria = document.getElementById("botao-desbloquear-biometria");
     const mensagemAvisoBiometria = document.getElementById("mensagem-aviso-biometria");
     const botaoUsarSenhaEmVez = document.getElementById("botao-usar-senha-em-vez");
@@ -426,6 +428,17 @@ document.addEventListener("DOMContentLoaded", function () {
         const prazoExclusao = dados && dados.exclusaoAgendadaPara ? dados.exclusaoAgendadaPara.toDate() : null;
 
         if (!prazoExclusao) {
+            // App reaberto com a sessão salva: sempre mostra a tela de
+            // boas-vindas primeiro e só segue quando a pessoa apertar Começar
+            if (!loginFoiInterativoNestaAbertura && telaBoasVindas && botaoComecarLogado) {
+                esconderSplash();
+                telaBoasVindas.hidden = false;
+                await new Promise((resolver) => {
+                    botaoComecarLogado.addEventListener("click", resolver, { once: true });
+                });
+                telaBoasVindas.hidden = true;
+            }
+
             const precisaBiometria = !loginFoiInterativoNestaAbertura
                 && biometriaAtiva(usuario.uid)
                 && await suportaBiometria();
@@ -439,8 +452,9 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            const devePerguntarBiometria = loginFoiInterativoNestaAbertura
-                && !biometriaAtiva(usuario.uid)
+            // Pergunta uma vez, mesmo em sessão já salva: quem já estava logado
+            // antes da biometria existir nunca era perguntado
+            const devePerguntarBiometria = !biometriaAtiva(usuario.uid)
                 && !biometriaJaPerguntada(usuario.uid)
                 && await suportaBiometria();
 
@@ -531,6 +545,13 @@ document.addEventListener("DOMContentLoaded", function () {
         const instantaneo = await getDoc(referenciaPerfil);
 
         const perfilCompleto = instantaneo.exists() && instantaneo.data().onboardingCompleto === true;
+
+        // Não corta a tela de carregamento no meio: espera ela completar o
+        // tempo dela antes de trocar de página
+        const faltaDaSplash = TEMPO_MINIMO_VISIVEL - (Date.now() - inicioCarregamento);
+        if (faltaDaSplash > 0 && !telaCarregamento.classList.contains("oculto")) {
+            await new Promise((resolver) => setTimeout(resolver, faltaDaSplash));
+        }
         window.location.href = perfilCompleto ? "dashboard.html" : "onboarding.html";
     }
 

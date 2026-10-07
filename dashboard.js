@@ -305,6 +305,15 @@ document.addEventListener("DOMContentLoaded", function () {
         uidAtual = usuario.uid;
         emailUsuario.textContent = usuario.email;
 
+        // Os dados principais começam a carregar JÁ, antes de qualquer outra
+        // consulta. Antes, eles esperavam a busca do perfil terminar — e no
+        // celular, com rede lenta, essa busca podia demorar ou travar e a
+        // tela ficava vazia até trocar de mês.
+        atualizarRotuloMes();
+        escutarLancamentosDoMes();
+        escutarPendenciasDoMes();
+        buscarGastosMesAnterior();
+
         // Busca do perfil isolada num try/catch — se essa consulta falhar
         // por uma instabilidade de rede bem na abertura do app (o momento
         // mais comum pra isso acontecer), a gente NÃO quer que o app fique
@@ -340,10 +349,7 @@ document.addEventListener("DOMContentLoaded", function () {
         // mês, porque aí esse mesmo bloco rodava de novo (via mudarPeriodo)
         // isolado do resto. Rodando isso primeiro, sem depender de nada
         // secundário, a tela principal nunca fica em branco.
-        atualizarRotuloMes();
-        escutarLancamentosDoMes();
-        escutarPendenciasDoMes();
-        buscarGastosMesAnterior();
+        // (os dados principais já foram iniciados lá em cima)
 
         // Dados secundários (categorias, orçamentos, metas, bancos,
         // cartões...) — cada um isolado num try/catch, pra um erro em
@@ -2187,6 +2193,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // ==========================================================================
     let pararDeEscutarResumoFaturaCartoes = null;
     let docsCartaoParaGrafico = []; // compras no cartão (pendências noCartao=true)
+    let primeiroSnapshotDoMesChegou = false;
     let ultimosDocumentosDoMes = []; // lançamentos do mês selecionado, pra redesenhar o gráfico
 
     function escutarResumoFaturaCartoes() {
@@ -2829,7 +2836,20 @@ document.addEventListener("DOMContentLoaded", function () {
             renderizarLista(documentosOrdenados);
             calcularTotais(documentosOrdenados);
             renderizarGrafico(documentosOrdenados);
+            primeiroSnapshotDoMesChegou = true;
+        }, (erro) => {
+            console.error("Bull: erro ao escutar os lançamentos do mês —", erro);
         });
+
+        // Rede de segurança: se nada chegou em 6s (rede instável na abertura),
+        // liga a escuta de novo uma vez
+        primeiroSnapshotDoMesChegou = false;
+        const mesDaEscuta = mesReferenciaAtual;
+        setTimeout(() => {
+            if (!primeiroSnapshotDoMesChegou && mesDaEscuta === mesReferenciaString(mesSelecionado)) {
+                escutarLancamentosDoMes();
+            }
+        }, 6000);
     }
 
     // ==========================================================================

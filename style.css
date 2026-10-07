@@ -192,6 +192,13 @@ body#pagina-login {
     margin-top: 4px;
 }
 
+.titulo-boas-vindas {
+    color: var(--text-primary);
+    font-size: 26px;
+    line-height: 1.25;
+    margin: 8px 0 12px;
+}
+
 .conteudo-bloqueio-biometria .mensagem-aviso {
     margin: 0;
 }

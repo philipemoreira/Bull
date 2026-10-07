@@ -154,6 +154,18 @@
 
     </div>
 
+        <!-- Tela de boas-vindas: aparece SEMPRE que o app abre com a pessoa já
+         logada (igual app de banco). Só segue pro app depois de apertar Começar. -->
+    <div class="tela-bloqueio-biometria" id="tela-boas-vindas" hidden>
+        <div class="conteudo-bloqueio-biometria">
+            <span class="selo-marca-carregamento">Bull</span>
+            <h1 class="titulo-boas-vindas">Cada centavo,<br>sob seu controle.</h1>
+            <button type="button" class="botao-enviar" id="botao-comecar-logado">
+                <span class="texto-botao">Começar</span>
+            </button>
+        </div>
+    </div>
+
     <!-- Aparece quando a pessoa ativou o login com biometria neste aparelho
          (ver Configurações) e o Firebase restaura uma sessão salva sozinho
          ao abrir o app — pede digital/Face ID/PIN antes de continuar. Não
