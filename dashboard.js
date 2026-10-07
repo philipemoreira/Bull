@@ -5,6 +5,7 @@ import {
     query, where, onSnapshot, Timestamp, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { iniciarModoPrivacidade } from "./privacidade.js";
+import { montarLancamentosDeCartao } from "./cartaoNoExtrato.js";
 
 const CATEGORIAS_PADRAO = {
     gasto: ["Outros"],
@@ -1991,6 +1992,13 @@ document.addEventListener("DOMContentLoaded", function () {
                     dadosLancamento.banco = campoBancoPagamento.value;
                 }
 
+                // Gasto à vista (pix/débito) que passa do "livre" do banco:
+                // oferece tirar a diferença do Guardado
+                if (dadosLancamento.tipo === "gasto" && !modoGuardar && dadosLancamento.banco) {
+                    const podeSeguir = await cobrirGastoComGuardado(dadosLancamento.banco, valorDigitado);
+                    if (!podeSeguir) return;
+                }
+
                 await addDoc(collection(db, "usuarios", uidAtual, "lancamentos"), dadosLancamento);
             }
 
@@ -2178,6 +2186,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // atual, ou deixar de somar a fatura certa — dependendo do dia do mês
     // ==========================================================================
     let pararDeEscutarResumoFaturaCartoes = null;
+    let docsCartaoParaGrafico = []; // compras no cartão (pendências noCartao=true)
+    let ultimosDocumentosDoMes = []; // lançamentos do mês selecionado, pra redesenhar o gráfico
 
     function escutarResumoFaturaCartoes() {
         if (pararDeEscutarResumoFaturaCartoes) pararDeEscutarResumoFaturaCartoes();
@@ -2188,6 +2198,11 @@ document.addEventListener("DOMContentLoaded", function () {
         pararDeEscutarResumoFaturaCartoes = onSnapshot(consulta, (snapshot) => {
             const todosOsItens = snapshot.docs;
             let totalGeral = 0;
+
+            // As compras no cartão também entram no gráfico por categoria
+            // (ver renderizarGrafico) — redesenha quando elas mudarem
+            docsCartaoParaGrafico = todosOsItens;
+            renderizarGrafico(ultimosDocumentosDoMes);
 
             // Um cartão por vez, do mesmo jeito que calcularEstadoCartao faz
             // em cartao.js — cada cartão tem seu próprio dia de fechamento,
@@ -2705,6 +2720,11 @@ document.addEventListener("DOMContentLoaded", function () {
             agoraDoPagamento.getSeconds(), agoraDoPagamento.getMilliseconds()
         );
 
+        if (dadosPendencia.banco && (dadosPendencia.formaPagamento === "pix" || dadosPendencia.formaPagamento === "debito")) {
+            const podeSeguir = await cobrirGastoComGuardado(dadosPendencia.banco, dadosPendencia.valor);
+            if (!podeSeguir) return;
+        }
+
         const novoLancamento = await addDoc(collection(db, "usuarios", uidAtual, "lancamentos"), {
             tipo: "gasto",
             valor: dadosPendencia.valor,
@@ -2805,6 +2825,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     return dataB - dataA;
                 }
             );
+            ultimosDocumentosDoMes = documentosOrdenados;
             renderizarLista(documentosOrdenados);
             calcularTotais(documentosOrdenados);
             renderizarGrafico(documentosOrdenados);
@@ -2840,12 +2861,10 @@ document.addEventListener("DOMContentLoaded", function () {
         valorSalarioBanner.value = salarioPadrao.toFixed(2).replace(".", ",");
     }
 
-    botaoConfirmarSalario.addEventListener("click", async () => {
-        const valor = paraNumero(valorSalarioBanner.value);
-        if (!valor || valor <= 0) return;
-
-        botaoConfirmarSalario.disabled = true;
-
+    // Grava o salário já com o banco escolhido — o saldo de cada banco só
+    // soma ganhos que têm "banco", então sem isso o salário não entrava
+    // no Saldo do Mês (era o bug: antes era gravado sem banco nenhum)
+    async function gravarSalarioRecebido(valor, nomeBanco) {
         await addDoc(collection(db, "usuarios", uidAtual, "lancamentos"), {
             tipo: "ganho",
             valor: valor,
@@ -2853,11 +2872,179 @@ document.addEventListener("DOMContentLoaded", function () {
             descricao: "",
             data: Timestamp.fromDate(new Date()),
             mesReferencia: mesReferenciaString(new Date()),
-            criadoEm: serverTimestamp()
+            criadoEm: serverTimestamp(),
+            ...(nomeBanco ? { banco: nomeBanco } : {})
+        });
+    }
+
+    const fundoModalBancoSalario = document.getElementById("fundo-modal-banco-salario");
+    const textoBancoSalario = document.getElementById("texto-banco-salario");
+    const campoBancoSalario = document.getElementById("campo-banco-salario");
+    const botaoConfirmarBancoSalario = document.getElementById("botao-confirmar-banco-salario");
+    const botaoFecharBancoSalario = document.getElementById("botao-fechar-banco-salario");
+    let valorSalarioPendente = 0;
+
+    botaoConfirmarSalario.addEventListener("click", async () => {
+        const valor = paraNumero(valorSalarioBanner.value);
+        if (!valor || valor <= 0) return;
+
+        // Sem nenhum banco cadastrado não tem pra onde mandar o dinheiro:
+        // grava como antes (o saldo nesse caso é só ganhos − gastos do mês)
+        if (bancosCustomizados.length === 0) {
+            botaoConfirmarSalario.disabled = true;
+            try { await gravarSalarioRecebido(valor, null); } finally { botaoConfirmarSalario.disabled = false; }
+            return;
+        }
+
+        valorSalarioPendente = valor;
+        textoBancoSalario.textContent = `Os ${formatarMoeda(valor)} vão entrar no saldo do banco que você escolher.`;
+        campoBancoSalario.innerHTML = "";
+        bancosCustomizados.forEach((banco) => {
+            const opcao = document.createElement("option");
+            opcao.value = banco.nome;
+            opcao.textContent = banco.nome;
+            if (banco.nome === nomeBancoPrincipalAtual) opcao.selected = true;
+            campoBancoSalario.appendChild(opcao);
+        });
+        fundoModalBancoSalario.classList.add("aberto");
+    });
+
+    botaoConfirmarBancoSalario.addEventListener("click", async () => {
+        botaoConfirmarBancoSalario.disabled = true;
+        try {
+            await gravarSalarioRecebido(valorSalarioPendente, campoBancoSalario.value);
+            fundoModalBancoSalario.classList.remove("aberto");
+            mostrarToast("Salário recebido ✓ — já entrou no saldo.");
+        } catch (erro) {
+            mostrarToast("Não deu pra registrar agora. Confere sua internet e tenta de novo.");
+        } finally {
+            botaoConfirmarBancoSalario.disabled = false;
+        }
+    });
+
+    botaoFecharBancoSalario.addEventListener("click", () => {
+        fundoModalBancoSalario.classList.remove("aberto");
+    });
+    fundoModalBancoSalario.addEventListener("click", (evento) => {
+        if (evento.target === fundoModalBancoSalario) fundoModalBancoSalario.classList.remove("aberto");
+    });
+
+    // ==========================================================================
+    // GASTO QUE USA DINHEIRO GUARDADO
+    // O saldo de um banco inclui o que está guardado nele. Se a pessoa gasta
+    // mais do que o "livre" (saldo − guardado), na prática está gastando
+    // dinheiro do Guardado. Aqui a gente pergunta e, se ela topar, faz a
+    // retirada automática (banco → o mesmo banco) antes de salvar o gasto.
+    // Devolve true se pode seguir com o gasto, false se a pessoa cancelou.
+    // ==========================================================================
+    const fundoModalCobrirGuardado = document.getElementById("fundo-modal-cobrir-guardado");
+    const textoCobrirGuardado = document.getElementById("texto-cobrir-guardado");
+    const campoMetaCobrirGuardado = document.getElementById("campo-meta-cobrir-guardado");
+    const botaoSimCobrirGuardado = document.getElementById("botao-sim-cobrir-guardado");
+    const botaoNaoCobrirGuardado = document.getElementById("botao-nao-cobrir-guardado");
+    const botaoFecharCobrirGuardado = document.getElementById("botao-fechar-cobrir-guardado");
+
+    function perguntarSobreGuardado(texto, metas) {
+        return new Promise((resolver) => {
+            textoCobrirGuardado.textContent = texto;
+            campoMetaCobrirGuardado.innerHTML = "";
+            metas.forEach((meta) => {
+                const opcao = document.createElement("option");
+                opcao.value = meta.nome;
+                opcao.textContent = `${meta.nome || "Sem meta"} — ${formatarMoeda(meta.total)}`;
+                campoMetaCobrirGuardado.appendChild(opcao);
+            });
+            fundoModalCobrirGuardado.classList.add("aberto");
+
+            const terminar = (resposta) => {
+                fundoModalCobrirGuardado.classList.remove("aberto");
+                botaoSimCobrirGuardado.removeEventListener("click", aoSim);
+                botaoNaoCobrirGuardado.removeEventListener("click", aoNao);
+                botaoFecharCobrirGuardado.removeEventListener("click", aoCancelar);
+                fundoModalCobrirGuardado.removeEventListener("click", aoFundo);
+                resolver(resposta);
+            };
+            const aoSim = () => terminar({ acao: "tirar", metaEscolhida: campoMetaCobrirGuardado.value });
+            const aoNao = () => terminar({ acao: "nao" });
+            const aoCancelar = () => terminar({ acao: "cancelar" });
+            const aoFundo = (evento) => { if (evento.target === fundoModalCobrirGuardado) aoCancelar(); };
+
+            botaoSimCobrirGuardado.addEventListener("click", aoSim);
+            botaoNaoCobrirGuardado.addEventListener("click", aoNao);
+            botaoFecharCobrirGuardado.addEventListener("click", aoCancelar);
+            fundoModalCobrirGuardado.addEventListener("click", aoFundo);
+        });
+    }
+
+    async function cobrirGastoComGuardado(nomeBanco, valorGasto) {
+        const bancoDoc = bancosCustomizados.find((b) => b.nome === nomeBanco);
+        if (!bancoDoc) return true;
+
+        const snapshotBanco = await getDoc(doc(db, "usuarios", uidAtual, "bancos", bancoDoc.id));
+        const saldoInicial = snapshotBanco.exists() ? (snapshotBanco.data().saldoInicial || 0) : 0;
+        const saldo = await calcularSaldoBancoAgora(nomeBanco, saldoInicial);
+
+        const snapshotLancamentos = await getDocs(collection(db, "usuarios", uidAtual, "lancamentos"));
+        const totalPorMeta = {};
+        snapshotLancamentos.forEach((documento) => {
+            const d = documento.data();
+            if (d.categoria === "Guardar Dinheiro" && d.banco === nomeBanco) {
+                const chave = d.meta || "";
+                totalPorMeta[chave] = (totalPorMeta[chave] || 0) + d.valor;
+            }
         });
 
-        botaoConfirmarSalario.disabled = false;
-    });
+        // Tudo em centavos (inteiros) pra não errar por fração de centavo
+        const metas = Object.keys(totalPorMeta)
+            .map((nome) => ({ nome, centavos: Math.round(totalPorMeta[nome] * 100) }))
+            .filter((m) => m.centavos > 0)
+            .sort((a, b) => b.centavos - a.centavos);
+        if (metas.length === 0) return true;
+
+        const guardadoCentavos = metas.reduce((soma, m) => soma + m.centavos, 0);
+        const livreCentavos = Math.round(saldo * 100) - guardadoCentavos;
+        const faltaCentavos = Math.round(valorGasto * 100) - Math.max(livreCentavos, 0);
+        if (faltaCentavos <= 0) return true;
+
+        const retirarCentavos = Math.min(faltaCentavos, guardadoCentavos);
+        const texto = `Esse gasto de ${formatarMoeda(valorGasto)} é maior do que você tem livre em ${nomeBanco}. `
+            + `Pra não deixar o Guardado desatualizado, posso tirar ${formatarMoeda(retirarCentavos / 100)} dele agora.`;
+        const resposta = await perguntarSobreGuardado(texto, metas.map((m) => ({ nome: m.nome, total: m.centavos / 100 })));
+
+        if (resposta.acao === "cancelar") return false;
+        if (resposta.acao === "nao") return true;
+
+        // Meta escolhida primeiro; se não bastar, completa com as maiores
+        const ordem = [
+            ...metas.filter((m) => m.nome === resposta.metaEscolhida),
+            ...metas.filter((m) => m.nome !== resposta.metaEscolhida)
+        ];
+        let restante = retirarCentavos;
+        const lote = writeBatch(db);
+        const agora = new Date();
+        ordem.forEach((meta) => {
+            if (restante <= 0) return;
+            const parte = Math.min(restante, meta.centavos);
+            restante -= parte;
+            const valorParte = parte / 100;
+            const refGasto = doc(collection(db, "usuarios", uidAtual, "lancamentos"));
+            const refGanho = doc(collection(db, "usuarios", uidAtual, "lancamentos"));
+            lote.set(refGasto, {
+                tipo: "gasto", valor: -valorParte, categoria: "Guardar Dinheiro", descricao: "Retirada",
+                banco: nomeBanco, meta: meta.nome || null,
+                data: Timestamp.fromDate(agora), mesReferencia: mesReferenciaString(agora),
+                criadoEm: serverTimestamp(), lancamentoParId: refGanho.id
+            });
+            lote.set(refGanho, {
+                tipo: "ganho", valor: valorParte, categoria: "Retirada da Reserva", descricao: "",
+                banco: nomeBanco,
+                data: Timestamp.fromDate(agora), mesReferencia: mesReferenciaString(agora),
+                criadoEm: serverTimestamp(), lancamentoParId: refGasto.id
+            });
+        });
+        await lote.commit();
+        return true;
+    }
 
     // ==========================================================================
     // 11. DESENHAR A LISTA (só os últimos N, o resto fica no Extrato Completo)
@@ -3110,11 +3297,25 @@ document.addEventListener("DOMContentLoaded", function () {
     // Desenhado em SVG puro (sem biblioteca externa), pra não depender de
     // internet extra nem pesar o app.
     // ==========================================================================
-    function renderizarGrafico(documentos) {
+    function renderizarGrafico(documentosDoMes) {
         const totaisPorCategoria = {};
+
+        // Compras no cartão de crédito entram aqui pelo mês em que foram
+        // feitas (só pra mostrar — não mexem no saldo, que só desce quando
+        // a fatura é paga). Por isso o lançamento "Fatura do Cartão" fica
+        // de fora do gráfico: ele é a soma dessas mesmas compras, e contar
+        // os dois seria gastar em dobro.
+        const nomesCartoes = {};
+        cartoesCustomizados.forEach((cartao) => { nomesCartoes[cartao.id] = cartao.nome; });
+        const mesDoGrafico = mesReferenciaString(mesSelecionado);
+        const comprasDoCartaoNoMes = montarLancamentosDeCartao(docsCartaoParaGrafico, nomesCartoes)
+            .filter((documento) => documento.data().mesReferencia === mesDoGrafico);
+        const documentos = [...documentosDoMes, ...comprasDoCartaoNoMes];
 
         documentos.forEach((documento) => {
             const dados = documento.data();
+
+            if (dados.categoria === "Fatura do Cartão") return;
 
             // Dinheiro guardado entra como uma fatia própria do gráfico, pra
             // mostrar o quanto foi poupado ao lado do que foi gasto

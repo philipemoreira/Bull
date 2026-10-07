@@ -64,11 +64,27 @@
             <h3 class="titulo-secao">Trocar senha</h3>
             <div class="campo">
                 <label for="campo-nova-senha">Nova senha</label>
-                <input type="password" id="campo-nova-senha" placeholder="Mínimo 6 caracteres" minlength="6" autocomplete="new-password">
+                <div class="campo-senha-wrapper">
+                    <input type="password" id="campo-nova-senha" placeholder="Mínimo 6 caracteres" minlength="6" autocomplete="new-password">
+                    <button type="button" class="botao-olho" id="botao-olho-nova" aria-label="Mostrar senha">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="campo">
                 <label for="campo-confirmar-nova-senha">Confirmar nova senha</label>
-                <input type="password" id="campo-confirmar-nova-senha" placeholder="Repete a nova senha" minlength="6" autocomplete="new-password">
+                <div class="campo-senha-wrapper">
+                    <input type="password" id="campo-confirmar-nova-senha" placeholder="Repete a nova senha" minlength="6" autocomplete="new-password">
+                    <button type="button" class="botao-olho" id="botao-olho-confirmar-nova" aria-label="Mostrar senha">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="mensagem-aviso" id="mensagem-aviso-senha"></div>
             <button type="button" class="botao-enviar" id="botao-salvar-senha">

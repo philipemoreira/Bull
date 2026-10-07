@@ -13,7 +13,10 @@ import {
     doc, getDoc, updateDoc, deleteDoc, deleteField,
     collection, getDocs, writeBatch, addDoc, query, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { suportaBiometria, biometriaAtiva, verificarBiometria } from "./biometria.js";
+import {
+    suportaBiometria, biometriaAtiva, verificarBiometria,
+    ativarBiometria, biometriaJaPerguntada, marcarBiometriaPerguntada
+} from "./biometria.js";
 
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -46,6 +49,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoDesbloquearBiometria = document.getElementById("botao-desbloquear-biometria");
     const mensagemAvisoBiometria = document.getElementById("mensagem-aviso-biometria");
     const botaoUsarSenhaEmVez = document.getElementById("botao-usar-senha-em-vez");
+
+    const fundoModalPerguntarBiometria = document.getElementById("fundo-modal-perguntar-biometria");
+    const mensagemAvisoPerguntarBiometria = document.getElementById("mensagem-aviso-perguntar-biometria");
+    const botaoSimAtivarBiometria = document.getElementById("botao-sim-ativar-biometria");
+    const botaoAgoraNaoBiometria = document.getElementById("botao-agora-nao-biometria");
 
     // Fica "true" assim que a pessoa faz login de propósito nessa mesma
     // abertura da página (digitou senha ou usou o Google) — nesse caso não
@@ -349,6 +357,12 @@ document.addEventListener("DOMContentLoaded", function () {
         async function usarSenha() {
             limpar();
             telaBloqueioBiometria.hidden = true;
+            // No celular, vai direto pro formulário (sem precisar apertar "Começar" de novo)
+            if (telaLogin) {
+                telaLogin.classList.add("mostrar-formulario");
+                if (painelMarcaLogin) painelMarcaLogin.inert = true;
+                if (painelFormularioLogin) painelFormularioLogin.inert = false;
+            }
             await signOut(auth);
         }
 
@@ -359,6 +373,47 @@ document.addEventListener("DOMContentLoaded", function () {
 
         botaoDesbloquearBiometria.addEventListener("click", tentar);
         botaoUsarSenhaEmVez.addEventListener("click", usarSenha);
+    }
+
+    // ==========================================================================
+    // PERGUNTAR SE QUER ATIVAR BIOMETRIA — aparece só uma vez, logo depois de
+    // um login manual (senha ou Google) nesse aparelho, se ele tiver suporte
+    // e a pessoa ainda não tiver sido perguntada antes. Quem recusar continua
+    // podendo ativar depois em Configurações, a qualquer momento.
+    // ==========================================================================
+    function perguntarSeQuerAtivarBiometria(usuario, aoContinuar) {
+        fundoModalPerguntarBiometria.classList.add("aberto");
+        mensagemAvisoPerguntarBiometria.textContent = "";
+        mensagemAvisoPerguntarBiometria.classList.remove("visivel");
+
+        async function aoAtivar() {
+            botaoSimAtivarBiometria.disabled = true;
+            try {
+                await ativarBiometria(usuario.uid, usuario.email, usuario.displayName);
+                marcarBiometriaPerguntada(usuario.uid);
+                limpar();
+                aoContinuar();
+            } catch (erro) {
+                mensagemAvisoPerguntarBiometria.textContent = "Não deu pra ativar agora. Você pode tentar de novo depois em Configurações.";
+                mensagemAvisoPerguntarBiometria.classList.add("visivel");
+                botaoSimAtivarBiometria.disabled = false;
+            }
+        }
+
+        function aoRecusar() {
+            marcarBiometriaPerguntada(usuario.uid);
+            limpar();
+            aoContinuar();
+        }
+
+        function limpar() {
+            fundoModalPerguntarBiometria.classList.remove("aberto");
+            botaoSimAtivarBiometria.removeEventListener("click", aoAtivar);
+            botaoAgoraNaoBiometria.removeEventListener("click", aoRecusar);
+        }
+
+        botaoSimAtivarBiometria.addEventListener("click", aoAtivar);
+        botaoAgoraNaoBiometria.addEventListener("click", aoRecusar);
     }
 
     async function verificarExclusaoAntesDeEntrar(usuario) {
@@ -378,6 +433,20 @@ document.addEventListener("DOMContentLoaded", function () {
             if (precisaBiometria) {
                 esconderSplash();
                 pedirDesbloqueioBiometrico(usuario, async () => {
+                    await registrarAcessoSeNecessario(usuario.uid);
+                    rotearAposLogin(usuario.uid);
+                });
+                return;
+            }
+
+            const devePerguntarBiometria = loginFoiInterativoNestaAbertura
+                && !biometriaAtiva(usuario.uid)
+                && !biometriaJaPerguntada(usuario.uid)
+                && await suportaBiometria();
+
+            if (devePerguntarBiometria) {
+                esconderSplash();
+                perguntarSeQuerAtivarBiometria(usuario, async () => {
                     await registrarAcessoSeNecessario(usuario.uid);
                     rotearAposLogin(usuario.uid);
                 });
@@ -555,6 +624,12 @@ document.addEventListener("DOMContentLoaded", function () {
         if (usuario) {
             verificarExclusaoAntesDeEntrar(usuario);
         } else {
+            // Saiu da conta (ex: "Entrar com senha em vez disso" na tela de
+            // biometria, ou "Sair sem reativar"): esquece quem já foi
+            // verificado. Sem isso, o PRÓXIMO login com a senha dessa mesma
+            // conta era ignorado em silêncio — dizia "Login realizado!" mas
+            // nunca saía da tela, parecendo que a senha não funcionava.
+            uidsJaVerificadosParaExclusao.clear();
             esconderSplash();
         }
     });

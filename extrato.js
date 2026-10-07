@@ -1,8 +1,9 @@
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-    collection, addDoc, deleteDoc, doc, query, orderBy, onSnapshot, Timestamp, serverTimestamp
+    collection, addDoc, deleteDoc, doc, query, where, orderBy, onSnapshot, getDocs, Timestamp, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { montarLancamentosDeCartao } from "./cartaoNoExtrato.js";
 
 // Mesma paleta e mesmo cálculo de cor por categoria do Dashboard — repetido
 // aqui (não dá pra importar entre esses arquivos soltos) pra categoria
@@ -92,6 +93,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let uidAtual = null;
     let todosOsLancamentos = []; // guarda tudo que veio do Firestore, sem filtro
+    let docsComprasCartao = []; // compras no crédito (pendências com noCartao = true)
+    let nomesCartoes = {}; // { cartaoId: "Nubank" }
 
     // Se a pessoa chegou aqui pelo link "Ver extrato completo" da tela inicial,
     // a URL já vem com ?mes=2026-08 — pré-preenche o filtro de mês com isso.
@@ -115,7 +118,24 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         uidAtual = usuario.uid;
         escutarTodosOsLancamentos();
+        escutarComprasDoCartao();
     });
+
+    // Compras no cartão de crédito também aparecem aqui, na lista — só pra
+    // mostrar (ver cartaoNoExtrato.js): não mexem em saldo, que só desce
+    // quando a fatura é paga.
+    async function escutarComprasDoCartao() {
+        try {
+            const cartoes = await getDocs(collection(db, "usuarios", uidAtual, "cartoes"));
+            cartoes.forEach((documento) => { nomesCartoes[documento.id] = documento.data().nome; });
+        } catch (erro) { /* sem o nome do cartão, só não mostra qual foi */ }
+
+        const consulta = query(collection(db, "usuarios", uidAtual, "pendencias"), where("noCartao", "==", true));
+        onSnapshot(consulta, (snapshot) => {
+            docsComprasCartao = snapshot.docs;
+            aplicarFiltrosERenderizar();
+        });
+    }
 
     function escutarTodosOsLancamentos() {
         const referencia = collection(db, "usuarios", uidAtual, "lancamentos");
@@ -143,7 +163,14 @@ document.addEventListener("DOMContentLoaded", function () {
         // A "Retirada" (valor negativo em "Guardar Dinheiro") é só um registro
         // interno de controle do cofrinho — não aparece pra pessoa em lugar
         // nenhum das listas normais, só a "Retirada da Reserva" (verde) aparece
-        let filtrados = todosOsLancamentos.filter(
+        const dataParaOrdenar = (documento) => {
+            const dados = documento.data();
+            return (dados.criadoEm && dados.criadoEm.toDate ? dados.criadoEm.toDate() : dados.data.toDate()).getTime();
+        };
+        const comprasDoCartao = montarLancamentosDeCartao(docsComprasCartao, nomesCartoes);
+        const todosJuntos = [...todosOsLancamentos, ...comprasDoCartao].sort((a, b) => dataParaOrdenar(b) - dataParaOrdenar(a));
+
+        let filtrados = todosJuntos.filter(
             (documento) => !(documento.data().categoria === "Guardar Dinheiro" && documento.data().valor < 0)
         );
 
@@ -230,7 +257,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     <div class="meta-lancamento">${dados.categoria} · ${dataFormatada} às ${horaFormatada}${textoFormaPagamento}</div>
                 </div>
                 <span class="valor-lancamento">${sinal} ${formatarMoeda(dados.valor)}</span>
-                <button class="botao-excluir" data-id="${documento.id}" data-categoria="${dados.categoria}" aria-label="Excluir lançamento">
+                <button class="botao-excluir" data-id="${documento.id}" data-categoria="${dados.categoria}" data-item-cartao="${dados.ehItemCartao ? "1" : ""}" aria-label="Excluir lançamento">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/>
                     </svg>
@@ -259,6 +286,13 @@ document.addEventListener("DOMContentLoaded", function () {
     listaExtrato.addEventListener("click", async (evento) => {
         const botao = evento.target.closest(".botao-excluir");
         if (!botao) return;
+
+        // Compra no cartão de crédito: quem gerencia (e exclui) é a tela
+        // Bancos e Cartões — aqui é só consulta
+        if (botao.dataset.itemCartao === "1") {
+            await confirmarComTelinha("Essa é uma compra no cartão de crédito. Pra excluir ou ajustar, vai em Bancos e Cartões.", "Compra no cartão");
+            return;
+        }
 
         // Itens do cofrinho ("Guardar Dinheiro") e o lançamento irmão que
         // devolve o valor pro saldo ("Retirada da Reserva") só podem ser

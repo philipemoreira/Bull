@@ -35,8 +35,17 @@ document.addEventListener("DOMContentLoaded", function () {
         campoNovoEmail.placeholder = usuario.email;
     });
 
-    botaoOlhoAtual.addEventListener("click", () => {
-        campoSenhaAtual.type = campoSenhaAtual.type === "password" ? "text" : "password";
+    // Olhinho de mostrar/esconder em todos os campos de senha dessa tela
+    [
+        [botaoOlhoAtual, campoSenhaAtual],
+        [document.getElementById("botao-olho-nova"), campoNovaSenha],
+        [document.getElementById("botao-olho-confirmar-nova"), campoConfirmarNovaSenha]
+    ].forEach(([botao, campo]) => {
+        botao.addEventListener("click", () => {
+            const estaEscondida = campo.type === "password";
+            campo.type = estaEscondida ? "text" : "password";
+            botao.setAttribute("aria-label", estaEscondida ? "Esconder senha" : "Mostrar senha");
+        });
     });
 
     function mostrarToast(mensagem, duracaoMs = 2500) {

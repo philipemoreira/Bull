@@ -178,6 +178,24 @@
         </div>
     </div>
 
+    <!-- Pergunta se a pessoa quer ativar a biometria — aparece só UMA VEZ,
+         logo depois de um login manual (senha ou Google) bem-sucedido nesse
+         aparelho, e só se o aparelho tiver suporte. Quem recusar sempre
+         pode ativar depois em Configurações → "Ativar Login com Biometria". -->
+    <div class="fundo-modal" id="fundo-modal-perguntar-biometria">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Ativar login com biometria?</h3>
+            </div>
+            <p class="texto-explicativo-guardado">Da próxima vez que você abrir o Bull neste aparelho, você pode entrar com sua digital, rosto ou PIN, em vez de digitar a senha. Dá pra ativar ou desativar isso quando quiser, em Configurações.</p>
+            <div class="mensagem-aviso" id="mensagem-aviso-perguntar-biometria" role="alert"></div>
+            <button type="button" class="botao-enviar" id="botao-sim-ativar-biometria">
+                <span class="texto-botao">Ativar</span>
+            </button>
+            <button type="button" class="link-botao-simples" id="botao-agora-nao-biometria" style="display:block; margin: 14px auto 0;">Agora não</button>
+        </div>
+    </div>
+
     <!-- Aparece só quando a pessoa loga numa conta marcada pra exclusão, ainda
          dentro do prazo de 7 dias — dá a chance de reativar em vez de perder
          tudo. Ver a checagem em app.js, logo após o login. -->

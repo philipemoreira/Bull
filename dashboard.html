@@ -434,6 +434,44 @@
         </div>
     </div>
 
+    <!-- Pergunta em qual banco o salário caiu — aparece ao apertar "Sim, recebi"
+         no banner do salário. É o banco escolhido aqui que recebe o valor
+         (e por isso o saldo dele sobe). -->
+    <div class="fundo-modal" id="fundo-modal-banco-salario">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Em qual banco caiu?</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-banco-salario" aria-label="Fechar">✕</button>
+            </div>
+            <p class="texto-explicativo-guardado" id="texto-banco-salario"></p>
+            <div class="campo">
+                <label for="campo-banco-salario">Banco</label>
+                <select id="campo-banco-salario"></select>
+            </div>
+            <button type="button" class="botao-enviar" id="botao-confirmar-banco-salario">
+                <span class="texto-botao">Confirmar recebimento</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="fundo-modal" id="fundo-modal-cobrir-guardado">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Usar o Guardado?</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-cobrir-guardado" aria-label="Cancelar">✕</button>
+            </div>
+            <p class="texto-explicativo-guardado" id="texto-cobrir-guardado"></p>
+            <div class="campo">
+                <label for="campo-meta-cobrir-guardado">Tirar de qual meta</label>
+                <select id="campo-meta-cobrir-guardado"></select>
+            </div>
+            <button type="button" class="botao-enviar" id="botao-sim-cobrir-guardado">
+                <span class="texto-botao">Tirar do Guardado e gastar</span>
+            </button>
+            <button type="button" class="link-botao-simples" id="botao-nao-cobrir-guardado">Gastar sem mexer no Guardado</button>
+        </div>
+    </div>
+
     <div class="fundo-modal" id="fundo-modal-confirmar">
         <div class="modal-lancamento">
             <div class="cabecalho-modal">

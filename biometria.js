@@ -15,6 +15,7 @@
 
 const PREFIXO_CREDENCIAL = "bull_biometria_credencial_";
 const PREFIXO_ATIVA = "bull_biometria_ativa_";
+const PREFIXO_PERGUNTADO = "bull_biometria_perguntado_";
 
 function bufferParaBase64(buffer) {
     return btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -52,6 +53,23 @@ export function desativarBiometria(uid) {
         localStorage.removeItem(PREFIXO_CREDENCIAL + uid);
         localStorage.removeItem(PREFIXO_ATIVA + uid);
     } catch (erro) { /* localStorage bloqueado — não tem o que fazer */ }
+}
+
+// Controla se a pergunta "quer ativar biometria?" já foi feita nesse
+// aparelho pra esse uid — pra perguntar só uma vez, não toda hora que a
+// pessoa loga de novo (ver app.js, logo após um login manual bem-sucedido)
+export function biometriaJaPerguntada(uid) {
+    try {
+        return localStorage.getItem(PREFIXO_PERGUNTADO + uid) === "1";
+    } catch (erro) {
+        return false;
+    }
+}
+
+export function marcarBiometriaPerguntada(uid) {
+    try {
+        localStorage.setItem(PREFIXO_PERGUNTADO + uid, "1");
+    } catch (erro) { /* localStorage bloqueado */ }
 }
 
 // Cria uma credencial nova NESSE aparelho (o próprio sistema decide se pede
