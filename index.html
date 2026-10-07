@@ -161,6 +161,7 @@
             <button type="button" class="botao-enviar" id="botao-comecar-logado">
                 <span class="texto-botao">Começar</span>
             </button>
+            <button type="button" class="link-botao-simples" id="botao-comecar-com-senha">Entrar com senha de 8 dígitos</button>
         </div>
     </div>
 
@@ -195,10 +196,22 @@
             <span class="selo-marca-carregamento">Bull</span>
             <h2 class="titulo-pin" id="titulo-pin">Senha de 8 dígitos</h2>
             <p class="texto-bloqueio-biometria" id="texto-pin"></p>
-            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"
-                   class="campo-pin" id="campo-pin" placeholder="••••••••" aria-label="Senha de 8 dígitos">
-            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"
-                   class="campo-pin" id="campo-pin-confirmar" placeholder="Repita a senha" aria-label="Repita a senha de 8 dígitos" hidden>
+            <div class="grupo-pin">
+                <label class="rotulo-pin" for="campo-pin" id="rotulo-pin">Senha</label>
+                <div class="pin-campo" id="pin-campo-1">
+                    <div class="pin-slots" aria-hidden="true"><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span></div>
+                    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"
+                           class="pin-entrada" id="campo-pin" aria-label="Senha de 8 dígitos">
+                </div>
+            </div>
+            <div class="grupo-pin" id="grupo-pin-confirmar" hidden>
+                <label class="rotulo-pin" for="campo-pin-confirmar">Repita a senha</label>
+                <div class="pin-campo" id="pin-campo-2">
+                    <div class="pin-slots" aria-hidden="true"><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span><span class="pin-slot"></span></div>
+                    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"
+                           class="pin-entrada" id="campo-pin-confirmar" aria-label="Repita a senha de 8 dígitos">
+                </div>
+            </div>
             <div class="mensagem-aviso" id="mensagem-aviso-pin" role="alert"></div>
             <button type="button" class="botao-enviar" id="botao-confirmar-pin">
                 <span class="texto-botao" id="texto-botao-pin">Entrar</span>

@@ -6,7 +6,7 @@
 // dos arquivos principais.
 // ==========================================================================
 
-const NOME_DO_CACHE = "financas-familia-v149";
+const NOME_DO_CACHE = "financas-familia-v151";
 
 // Arquivos essenciais, guardados localmente no primeiro acesso
 const ARQUIVOS_ESSENCIAIS = [

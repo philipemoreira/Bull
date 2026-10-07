@@ -49,6 +49,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const telaBloqueioBiometria = document.getElementById("tela-bloqueio-biometria");
     const telaBoasVindas = document.getElementById("tela-boas-vindas");
     const botaoComecarLogado = document.getElementById("botao-comecar-logado");
+    const botaoComecarComSenha = document.getElementById("botao-comecar-com-senha");
     const botaoDesbloquearBiometria = document.getElementById("botao-desbloquear-biometria");
     const mensagemAvisoBiometria = document.getElementById("mensagem-aviso-biometria");
     const botaoUsarSenhaEmVez = document.getElementById("botao-usar-senha-em-vez");
@@ -58,6 +59,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const textoPin = document.getElementById("texto-pin");
     const campoPin = document.getElementById("campo-pin");
     const campoPinConfirmar = document.getElementById("campo-pin-confirmar");
+    const grupoPinConfirmar = document.getElementById("grupo-pin-confirmar");
+    const rotuloPin = document.getElementById("rotulo-pin");
     const mensagemAvisoPin = document.getElementById("mensagem-aviso-pin");
     const botaoConfirmarPin = document.getElementById("botao-confirmar-pin");
     const textoBotaoPin = document.getElementById("texto-botao-pin");
@@ -364,11 +367,39 @@ document.addEventListener("DOMContentLoaded", function () {
         mensagemAvisoPin.classList.toggle("visivel", Boolean(texto));
     }
 
+    // Desenha as 8 casinhas conforme os números digitados
+    function atualizarCasinhasPin(campo) {
+        const caixa = campo.closest(".pin-campo");
+        const casinhas = caixa.querySelectorAll(".pin-slot");
+        const tamanho = campo.value.length;
+        const focado = document.activeElement === campo;
+        casinhas.forEach((casinha, indice) => {
+            casinha.classList.toggle("preenchido", indice < tamanho);
+            casinha.classList.toggle("ativo", focado && indice === Math.min(tamanho, 7));
+        });
+    }
+
+    function limparCampoPin(campo) {
+        campo.value = "";
+        atualizarCasinhasPin(campo);
+    }
+
+    function tremerCampoPin(campo) {
+        const caixa = campo.closest(".pin-campo");
+        caixa.classList.remove("erro");
+        void caixa.offsetWidth;
+        caixa.classList.add("erro");
+        setTimeout(() => caixa.classList.remove("erro"), 500);
+    }
+
     // Mantém só números nos campos da senha de 8 dígitos
     [campoPin, campoPinConfirmar].forEach((campo) => {
         campo.addEventListener("input", () => {
             campo.value = campo.value.replace(/\D/g, "").slice(0, 8);
+            atualizarCasinhasPin(campo);
         });
+        campo.addEventListener("focus", () => atualizarCasinhasPin(campo));
+        campo.addEventListener("blur", () => atualizarCasinhasPin(campo));
     });
 
     function sairDaContaEMostrarLogin(aviso) {
@@ -378,14 +409,22 @@ document.addEventListener("DOMContentLoaded", function () {
         return signOut(auth);
     }
 
+    // Devolve "biometria" (apertou Começar) ou "senha" (escolheu digitar a
+    // senha de 8 dígitos de propósito, mesmo tendo biometria)
     function aguardarComecar() {
         esconderSplash();
         telaBoasVindas.hidden = false;
         return new Promise((resolver) => {
-            botaoComecarLogado.addEventListener("click", () => {
+            function terminar(escolha) {
+                botaoComecarLogado.removeEventListener("click", aoComecar);
+                botaoComecarComSenha.removeEventListener("click", aoSenha);
                 telaBoasVindas.hidden = true;
-                resolver();
-            }, { once: true });
+                resolver(escolha);
+            }
+            function aoComecar() { terminar("biometria"); }
+            function aoSenha() { terminar("senha"); }
+            botaoComecarLogado.addEventListener("click", aoComecar);
+            botaoComecarComSenha.addEventListener("click", aoSenha);
         });
     }
 
@@ -435,10 +474,10 @@ document.addEventListener("DOMContentLoaded", function () {
         textoPin.textContent = criando
             ? "É a senha que você vai usar pra entrar no Bull. A senha da conta serve só pro login."
             : "Confirme que é você pra entrar no Bull.";
-        campoPin.value = "";
-        campoPinConfirmar.value = "";
-        campoPin.placeholder = criando ? "8 números" : "••••••••";
-        campoPinConfirmar.hidden = !criando;
+        limparCampoPin(campoPin);
+        limparCampoPin(campoPinConfirmar);
+        rotuloPin.textContent = criando ? "Nova senha" : "Senha";
+        grupoPinConfirmar.hidden = !criando;
         textoBotaoPin.textContent = criando ? "Criar senha" : "Entrar";
         botaoConfirmarPin.hidden = false;
         botaoEsqueciPin.textContent = criando ? "Sair da conta" : "Esqueci minha senha de 8 dígitos";
@@ -475,7 +514,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 botaoConfirmarPin.disabled = false;
                 if (certo) { terminar(true); return; }
                 erros++;
-                campoPin.value = "";
+                limparCampoPin(campoPin);
+                tremerCampoPin(campoPin);
                 if (erros >= 5) {
                     terminar(false);
                     sairDaContaEMostrarLogin("Senha de 8 dígitos errada 5 vezes. Entre de novo com e-mail e senha da conta.");
@@ -585,10 +625,10 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         // App reaberto com a sessão salva: Começar → biometria → senha de 8 dígitos
-        await aguardarComecar();
+        const escolha = await aguardarComecar();
 
         let desbloqueou = false;
-        if (biometriaAtiva(usuario.uid) && await suportaBiometria()) {
+        if (escolha === "biometria" && biometriaAtiva(usuario.uid) && await suportaBiometria()) {
             desbloqueou = await tentarBiometriaAte3(usuario);
         }
         if (!desbloqueou) {
