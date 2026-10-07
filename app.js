@@ -10,13 +10,14 @@ import {
     deleteUser
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-    doc, getDoc, updateDoc, deleteDoc, deleteField,
+    doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField,
     collection, getDocs, writeBatch, addDoc, query, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
     suportaBiometria, biometriaAtiva, verificarBiometria,
     ativarBiometria, biometriaJaPerguntada, marcarBiometriaPerguntada
 } from "./biometria.js";
+import { pinValido, criarRegistroPin, conferirPin } from "./pin.js";
 
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -52,10 +53,19 @@ document.addEventListener("DOMContentLoaded", function () {
     const mensagemAvisoBiometria = document.getElementById("mensagem-aviso-biometria");
     const botaoUsarSenhaEmVez = document.getElementById("botao-usar-senha-em-vez");
 
-    const fundoModalPerguntarBiometria = document.getElementById("fundo-modal-perguntar-biometria");
-    const mensagemAvisoPerguntarBiometria = document.getElementById("mensagem-aviso-perguntar-biometria");
-    const botaoSimAtivarBiometria = document.getElementById("botao-sim-ativar-biometria");
-    const botaoAgoraNaoBiometria = document.getElementById("botao-agora-nao-biometria");
+    const telaPin = document.getElementById("tela-pin");
+    const tituloPin = document.getElementById("titulo-pin");
+    const textoPin = document.getElementById("texto-pin");
+    const campoPin = document.getElementById("campo-pin");
+    const campoPinConfirmar = document.getElementById("campo-pin-confirmar");
+    const mensagemAvisoPin = document.getElementById("mensagem-aviso-pin");
+    const botaoConfirmarPin = document.getElementById("botao-confirmar-pin");
+    const textoBotaoPin = document.getElementById("texto-botao-pin");
+    const botaoEsqueciPin = document.getElementById("botao-esqueci-pin");
+
+    // Quando a pessoa diz "esqueci minha senha de 8 dígitos": sai da conta,
+    // entra de novo com e-mail/senha e aí cria uma nova de 8 dígitos
+    let redefinirPinNoProximoLogin = false;
 
     // Fica "true" assim que a pessoa faz login de propósito nessa mesma
     // abertura da página (digitou senha ou usou o Google) — nesse caso não
@@ -71,8 +81,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // ruim, Firebase fora do ar, etc.), o TEMPO_MAXIMO_SEGURANCA garante que
     // ela some sozinha de qualquer jeito — nunca mais fica travada pra sempre.
     // ==========================================================================
-    const TEMPO_MINIMO_VISIVEL = 7000; // a tela de carregamento fica visível por esse tempo, de propósito
-    const TEMPO_MAXIMO_SEGURANCA = 8500; // rede de segurança: nunca passa disso, mesmo com internet ruim
+    const TEMPO_MINIMO_VISIVEL = 4000; // tempo da barrinha encher (tem que bater com o CSS)
+    const TEMPO_MAXIMO_SEGURANCA = 5000; // rede de segurança: nunca passa disso, mesmo com internet ruim
     const inicioCarregamento = Date.now();
     let splashJaEscondida = false;
 
@@ -88,13 +98,17 @@ document.addEventListener("DOMContentLoaded", function () {
     // Rede de segurança: dispara sozinha, independente de qualquer outra coisa
     setTimeout(esconderSplash, TEMPO_MAXIMO_SEGURANCA);
 
-    // Troca o texto embaixo da barra em alguns momentos, pra dar sensação
-    // de progresso de verdade ao longo dos 12 segundos (em vez de uma
-    // frase parada o tempo todo)
-    const textoStatusCarregamento = document.getElementById("texto-status-carregamento");
-    if (textoStatusCarregamento) {
-        setTimeout(() => { textoStatusCarregamento.textContent = "Organizando suas finanças"; }, 2500);
-        setTimeout(() => { textoStatusCarregamento.textContent = "Quase lá"; }, 5000);
+    // Mostra a tela de carregamento de novo (depois de desbloquear, enquanto
+    // o app troca de página). No máximo 7 segundos.
+    function mostrarSplashDeNovo() {
+        const barra = document.getElementById("barra-progresso-preenchimento");
+        telaCarregamento.classList.remove("oculto");
+        if (barra) {
+            barra.style.animation = "none";
+            void barra.offsetWidth;
+            barra.style.animation = "";
+        }
+        setTimeout(() => telaCarregamento.classList.add("oculto"), 7000);
     }
 
     let modoAtual = "entrar";
@@ -127,6 +141,13 @@ document.addEventListener("DOMContentLoaded", function () {
     // da tela — sem isso, o teclado "vazaria" pro conteúdo escondido.
     const painelMarcaLogin = document.querySelector(".painel-marca");
     const painelFormularioLogin = document.querySelector(".painel-formulario");
+
+    function irParaFormularioLogin() {
+        if (!telaLogin) return;
+        telaLogin.classList.add("mostrar-formulario");
+        if (painelMarcaLogin) painelMarcaLogin.inert = true;
+        if (painelFormularioLogin) painelFormularioLogin.inert = false;
+    }
 
     if (botaoComecar && telaLogin) {
         botaoComecar.addEventListener("click", () => {
@@ -329,93 +350,254 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ==========================================================================
-    // BLOQUEIO POR BIOMETRIA — só aparece se a pessoa ativou isso nesse
-    // aparelho (Configurações) E o login não foi interativo agora (ou seja,
-    // é uma sessão que o Firebase restaurou sozinho ao abrir o app de novo).
-    // Se a biometria falhar ou for cancelada, dá pra tentar de novo ou sair
-    // e entrar normalmente com a senha.
+    // ENTRADA NO APP: Começar → biometria (automática, até 3 tentativas) →
+    // senha de 8 dígitos. A senha da CONTA só serve pro login.
     // ==========================================================================
-    function pedirDesbloqueioBiometrico(usuario, aoDesbloquear) {
-        telaBloqueioBiometria.hidden = false;
-        mensagemAvisoBiometria.textContent = "";
-        mensagemAvisoBiometria.classList.remove("visivel");
-
-        async function tentar() {
-            botaoDesbloquearBiometria.disabled = true;
-            mensagemAvisoBiometria.classList.remove("visivel");
-            try {
-                await verificarBiometria(usuario.uid);
-                limpar();
-                telaBloqueioBiometria.hidden = true;
-                aoDesbloquear();
-            } catch (erro) {
-                mensagemAvisoBiometria.textContent = "Não deu pra confirmar a biometria. Tenta de novo ou entra com sua senha.";
-                mensagemAvisoBiometria.classList.add("visivel");
-            } finally {
-                botaoDesbloquearBiometria.disabled = false;
-            }
-        }
-
-        async function usarSenha() {
-            limpar();
-            telaBloqueioBiometria.hidden = true;
-            // No celular, vai direto pro formulário (sem precisar apertar "Começar" de novo)
-            if (telaLogin) {
-                telaLogin.classList.add("mostrar-formulario");
-                if (painelMarcaLogin) painelMarcaLogin.inert = true;
-                if (painelFormularioLogin) painelFormularioLogin.inert = false;
-            }
-            await signOut(auth);
-        }
-
-        function limpar() {
-            botaoDesbloquearBiometria.removeEventListener("click", tentar);
-            botaoUsarSenhaEmVez.removeEventListener("click", usarSenha);
-        }
-
-        botaoDesbloquearBiometria.addEventListener("click", tentar);
-        botaoUsarSenhaEmVez.addEventListener("click", usarSenha);
+    function esconderTodasAsTelasDeBloqueio() {
+        telaBoasVindas.hidden = true;
+        telaBloqueioBiometria.hidden = true;
+        telaPin.hidden = true;
     }
 
-    // ==========================================================================
-    // PERGUNTAR SE QUER ATIVAR BIOMETRIA — aparece só uma vez, logo depois de
-    // um login manual (senha ou Google) nesse aparelho, se ele tiver suporte
-    // e a pessoa ainda não tiver sido perguntada antes. Quem recusar continua
-    // podendo ativar depois em Configurações, a qualquer momento.
-    // ==========================================================================
-    function perguntarSeQuerAtivarBiometria(usuario, aoContinuar) {
-        fundoModalPerguntarBiometria.classList.add("aberto");
-        mensagemAvisoPerguntarBiometria.textContent = "";
-        mensagemAvisoPerguntarBiometria.classList.remove("visivel");
+    function mostrarAvisoPin(texto) {
+        mensagemAvisoPin.textContent = texto;
+        mensagemAvisoPin.classList.toggle("visivel", Boolean(texto));
+    }
 
-        async function aoAtivar() {
-            botaoSimAtivarBiometria.disabled = true;
-            try {
-                await ativarBiometria(usuario.uid, usuario.email, usuario.displayName);
-                marcarBiometriaPerguntada(usuario.uid);
-                limpar();
-                aoContinuar();
-            } catch (erro) {
-                mensagemAvisoPerguntarBiometria.textContent = "Não deu pra ativar agora. Você pode tentar de novo depois em Configurações.";
-                mensagemAvisoPerguntarBiometria.classList.add("visivel");
-                botaoSimAtivarBiometria.disabled = false;
+    // Mantém só números nos campos da senha de 8 dígitos
+    [campoPin, campoPinConfirmar].forEach((campo) => {
+        campo.addEventListener("input", () => {
+            campo.value = campo.value.replace(/\D/g, "").slice(0, 8);
+        });
+    });
+
+    function sairDaContaEMostrarLogin(aviso) {
+        esconderTodasAsTelasDeBloqueio();
+        irParaFormularioLogin();
+        if (aviso) mostrarAviso(aviso);
+        return signOut(auth);
+    }
+
+    function aguardarComecar() {
+        esconderSplash();
+        telaBoasVindas.hidden = false;
+        return new Promise((resolver) => {
+            botaoComecarLogado.addEventListener("click", () => {
+                telaBoasVindas.hidden = true;
+                resolver();
+            }, { once: true });
+        });
+    }
+
+    // Biometria começa sozinha, sem perguntar nada. Cada falha (ou
+    // cancelamento) conta; no 3º erro cai pra senha de 8 dígitos.
+    function tentarBiometriaAte3(usuario) {
+        return new Promise((resolver) => {
+            let erros = 0;
+            telaBloqueioBiometria.hidden = false;
+            mensagemAvisoBiometria.classList.remove("visivel");
+            botaoDesbloquearBiometria.hidden = true;
+
+            function terminar(passou) {
+                botaoDesbloquearBiometria.removeEventListener("click", tentar);
+                botaoUsarSenhaEmVez.removeEventListener("click", aoUsarSenha);
+                telaBloqueioBiometria.hidden = true;
+                resolver(passou);
             }
-        }
+            function aoUsarSenha() { terminar(false); }
 
-        function aoRecusar() {
+            async function tentar() {
+                botaoDesbloquearBiometria.disabled = true;
+                mensagemAvisoBiometria.classList.remove("visivel");
+                try {
+                    await verificarBiometria(usuario.uid);
+                    terminar(true);
+                    return;
+                } catch (erro) {
+                    erros++;
+                }
+                if (erros >= 3) { terminar(false); return; }
+                mensagemAvisoBiometria.textContent = `Não deu certo (${erros}/3). Tenta de novo.`;
+                mensagemAvisoBiometria.classList.add("visivel");
+                botaoDesbloquearBiometria.hidden = false;
+                botaoDesbloquearBiometria.disabled = false;
+            }
+
+            botaoDesbloquearBiometria.addEventListener("click", tentar);
+            botaoUsarSenhaEmVez.addEventListener("click", aoUsarSenha);
+            tentar();
+        });
+    }
+
+    function prepararTelaPin(modo) {
+        const criando = modo === "criar";
+        tituloPin.textContent = criando ? "Crie sua senha de 8 dígitos" : "Digite sua senha de 8 dígitos";
+        textoPin.textContent = criando
+            ? "É a senha que você vai usar pra entrar no Bull. A senha da conta serve só pro login."
+            : "Confirme que é você pra entrar no Bull.";
+        campoPin.value = "";
+        campoPinConfirmar.value = "";
+        campoPin.placeholder = criando ? "8 números" : "••••••••";
+        campoPinConfirmar.hidden = !criando;
+        textoBotaoPin.textContent = criando ? "Criar senha" : "Entrar";
+        botaoConfirmarPin.hidden = false;
+        botaoEsqueciPin.textContent = criando ? "Sair da conta" : "Esqueci minha senha de 8 dígitos";
+        mostrarAvisoPin("");
+        telaPin.hidden = false;
+        setTimeout(() => campoPin.focus(), 50);
+    }
+
+    // Digitar a senha de 8 dígitos. true = entrou; false = saiu da conta.
+    function pedirPin(usuario, registroPin) {
+        return new Promise((resolver) => {
+            prepararTelaPin("verificar");
+            let erros = 0;
+            let conferindo = false;
+
+            function terminar(resultado) {
+                campoPin.removeEventListener("input", aoDigitar);
+                botaoConfirmarPin.removeEventListener("click", conferir);
+                botaoEsqueciPin.removeEventListener("click", aoEsquecer);
+                telaPin.hidden = true;
+                resolver(resultado);
+            }
+
+            async function conferir() {
+                if (conferindo) return;
+                if (!pinValido(campoPin.value)) {
+                    mostrarAvisoPin("A senha tem 8 números.");
+                    return;
+                }
+                conferindo = true;
+                botaoConfirmarPin.disabled = true;
+                const certo = await conferirPin(campoPin.value, registroPin);
+                conferindo = false;
+                botaoConfirmarPin.disabled = false;
+                if (certo) { terminar(true); return; }
+                erros++;
+                campoPin.value = "";
+                if (erros >= 5) {
+                    terminar(false);
+                    sairDaContaEMostrarLogin("Senha de 8 dígitos errada 5 vezes. Entre de novo com e-mail e senha da conta.");
+                    return;
+                }
+                mostrarAvisoPin(`Senha errada (${erros}/5).`);
+                campoPin.focus();
+            }
+
+            function aoDigitar() {
+                if (campoPin.value.length === 8) conferir();
+            }
+
+            function aoEsquecer() {
+                redefinirPinNoProximoLogin = true;
+                terminar(false);
+                sairDaContaEMostrarLogin("Entre com e-mail e senha da conta. Depois você cria uma nova senha de 8 dígitos.");
+            }
+
+            campoPin.addEventListener("input", aoDigitar);
+            botaoConfirmarPin.addEventListener("click", conferir);
+            botaoEsqueciPin.addEventListener("click", aoEsquecer);
+        });
+    }
+
+    // Criar a senha de 8 dígitos (1ª vez, ou depois de "esqueci"). true = criada.
+    function pedirCriarPin(usuario) {
+        return new Promise((resolver) => {
+            prepararTelaPin("criar");
+
+            function terminar(resultado) {
+                botaoConfirmarPin.removeEventListener("click", criar);
+                botaoEsqueciPin.removeEventListener("click", aoSair);
+                telaPin.hidden = true;
+                resolver(resultado);
+            }
+
+            async function criar() {
+                const pin = campoPin.value;
+                if (!pinValido(pin)) { mostrarAvisoPin("A senha precisa ter exatamente 8 números."); return; }
+                if (/^(\d)\1{7}$/.test(pin) || pin === "12345678" || pin === "87654321") {
+                    mostrarAvisoPin("Essa senha é fácil demais de adivinhar. Escolhe outra.");
+                    return;
+                }
+                if (pin !== campoPinConfirmar.value) { mostrarAvisoPin("As duas senhas não são iguais."); return; }
+
+                botaoConfirmarPin.disabled = true;
+                try {
+                    const registro = await criarRegistroPin(pin);
+                    await setDoc(doc(db, "usuarios", usuario.uid), { pinSenha: registro }, { merge: true });
+                    terminar(true);
+                } catch (erro) {
+                    mostrarAvisoPin("Não deu pra salvar agora. Confere a internet e tenta de novo.");
+                } finally {
+                    botaoConfirmarPin.disabled = false;
+                }
+            }
+
+            function aoSair() {
+                terminar(false);
+                sairDaContaEMostrarLogin("");
+            }
+
+            botaoConfirmarPin.addEventListener("click", criar);
+            botaoEsqueciPin.addEventListener("click", aoSair);
+        });
+    }
+
+    // Liga a biometria sozinha, uma vez por aparelho (o sistema pede a
+    // digital/rosto nessa hora). Se falhar ou for negada, segue só com a senha.
+    async function ativarBiometriaSeForPossivel(usuario) {
+        try {
+            if (biometriaAtiva(usuario.uid) || biometriaJaPerguntada(usuario.uid)) return;
+            if (!(await suportaBiometria())) return;
             marcarBiometriaPerguntada(usuario.uid);
-            limpar();
-            aoContinuar();
+            await ativarBiometria(usuario.uid, usuario.email, usuario.displayName);
+        } catch (erro) {
+            // Sem biometria nesse aparelho — a senha de 8 dígitos continua valendo
+        }
+    }
+
+    async function concluirEntrada(usuario) {
+        esconderTodasAsTelasDeBloqueio();
+        mostrarSplashDeNovo();
+        await registrarAcessoSeNecessario(usuario.uid);
+        rotearAposLogin(usuario.uid);
+    }
+
+    async function entrarNoApp(usuario, dadosPerfil) {
+        const registroPin = dadosPerfil && dadosPerfil.pinSenha ? dadosPerfil.pinSenha : null;
+
+        // Sem senha de 8 dígitos (conta nova/antiga) ou "esqueci": cria agora
+        if (!registroPin || redefinirPinNoProximoLogin) {
+            esconderSplash();
+            const criou = await pedirCriarPin(usuario);
+            if (!criou) return;
+            redefinirPinNoProximoLogin = false;
+            await ativarBiometriaSeForPossivel(usuario);
+            await concluirEntrada(usuario);
+            return;
         }
 
-        function limpar() {
-            fundoModalPerguntarBiometria.classList.remove("aberto");
-            botaoSimAtivarBiometria.removeEventListener("click", aoAtivar);
-            botaoAgoraNaoBiometria.removeEventListener("click", aoRecusar);
+        // Acabou de digitar e-mail e senha da conta: entra direto
+        if (loginFoiInterativoNestaAbertura) {
+            await concluirEntrada(usuario);
+            return;
         }
 
-        botaoSimAtivarBiometria.addEventListener("click", aoAtivar);
-        botaoAgoraNaoBiometria.addEventListener("click", aoRecusar);
+        // App reaberto com a sessão salva: Começar → biometria → senha de 8 dígitos
+        await aguardarComecar();
+
+        let desbloqueou = false;
+        if (biometriaAtiva(usuario.uid) && await suportaBiometria()) {
+            desbloqueou = await tentarBiometriaAte3(usuario);
+        }
+        if (!desbloqueou) {
+            desbloqueou = await pedirPin(usuario, registroPin);
+            if (desbloqueou) await ativarBiometriaSeForPossivel(usuario);
+        }
+        if (!desbloqueou) return;
+
+        await concluirEntrada(usuario);
     }
 
     async function verificarExclusaoAntesDeEntrar(usuario) {
@@ -428,47 +610,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const prazoExclusao = dados && dados.exclusaoAgendadaPara ? dados.exclusaoAgendadaPara.toDate() : null;
 
         if (!prazoExclusao) {
-            // App reaberto com a sessão salva: sempre mostra a tela de
-            // boas-vindas primeiro e só segue quando a pessoa apertar Começar
-            if (!loginFoiInterativoNestaAbertura && telaBoasVindas && botaoComecarLogado) {
-                esconderSplash();
-                telaBoasVindas.hidden = false;
-                await new Promise((resolver) => {
-                    botaoComecarLogado.addEventListener("click", resolver, { once: true });
-                });
-                telaBoasVindas.hidden = true;
-            }
-
-            const precisaBiometria = !loginFoiInterativoNestaAbertura
-                && biometriaAtiva(usuario.uid)
-                && await suportaBiometria();
-
-            if (precisaBiometria) {
-                esconderSplash();
-                pedirDesbloqueioBiometrico(usuario, async () => {
-                    await registrarAcessoSeNecessario(usuario.uid);
-                    rotearAposLogin(usuario.uid);
-                });
-                return;
-            }
-
-            // Pergunta uma vez, mesmo em sessão já salva: quem já estava logado
-            // antes da biometria existir nunca era perguntado
-            const devePerguntarBiometria = !biometriaAtiva(usuario.uid)
-                && !biometriaJaPerguntada(usuario.uid)
-                && await suportaBiometria();
-
-            if (devePerguntarBiometria) {
-                esconderSplash();
-                perguntarSeQuerAtivarBiometria(usuario, async () => {
-                    await registrarAcessoSeNecessario(usuario.uid);
-                    rotearAposLogin(usuario.uid);
-                });
-                return;
-            }
-
-            await registrarAcessoSeNecessario(usuario.uid);
-            rotearAposLogin(usuario.uid);
+            await entrarNoApp(usuario, dados);
             return;
         }
 
@@ -546,12 +688,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const perfilCompleto = instantaneo.exists() && instantaneo.data().onboardingCompleto === true;
 
-        // Não corta a tela de carregamento no meio: espera ela completar o
-        // tempo dela antes de trocar de página
-        const faltaDaSplash = TEMPO_MINIMO_VISIVEL - (Date.now() - inicioCarregamento);
-        if (faltaDaSplash > 0 && !telaCarregamento.classList.contains("oculto")) {
-            await new Promise((resolver) => setTimeout(resolver, faltaDaSplash));
-        }
         window.location.href = perfilCompleto ? "dashboard.html" : "onboarding.html";
     }
 

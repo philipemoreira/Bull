@@ -106,7 +106,7 @@ body#pagina-login {
     width: 0%;
     background-color: #FFFFFF;
     border-radius: 20px;
-    animation: preencher-barra-carregamento 7s linear forwards;
+    animation: preencher-barra-carregamento 4s linear forwards;
 }
 
 .texto-status-carregamento {
@@ -886,4 +886,37 @@ html.privacidade-ativa .valor-item-resumo:active::after,
 html.privacidade-ativa #secao-fatura-cartao .saldo-banco-preview:active::after,
 html.privacidade-ativa #secao-fatura-cartao .cartao-resumo-valor:active::after {
     content: "";
+}
+
+
+/* Senha de 8 dígitos do app */
+.titulo-pin {
+    color: var(--text-primary);
+    font-size: 20px;
+    margin: 0;
+}
+
+.campo-pin {
+    width: 100%;
+    text-align: center;
+    font-size: 26px;
+    letter-spacing: 8px;
+    padding: 14px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
+}
+
+.campo-pin[hidden] {
+    display: none;
+}
+
+.campo-pin:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.botao-enviar[hidden] {
+    display: none;
 }

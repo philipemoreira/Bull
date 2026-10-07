@@ -28,8 +28,6 @@
             <div class="barra-progresso-carregamento">
                 <div class="barra-progresso-preenchimento" id="barra-progresso-preenchimento"></div>
             </div>
-
-            <p class="texto-status-carregamento" id="texto-status-carregamento">Preparando tudo pra você</p>
         </div>
     </div>
 
@@ -181,30 +179,31 @@
                     <path d="M15 20.5c.5-1 .8-2.2.8-3.5v-3"/>
                 </svg>
             </div>
-            <p class="texto-bloqueio-biometria">Desbloqueie com sua digital, rosto ou PIN do aparelho pra continuar no Bull</p>
+            <p class="texto-bloqueio-biometria">Confirme com sua digital ou rosto pra entrar no Bull</p>
             <button type="button" class="botao-enviar" id="botao-desbloquear-biometria">
-                <span class="texto-botao">Desbloquear</span>
+                <span class="texto-botao">Tentar de novo</span>
             </button>
             <div class="mensagem-aviso" id="mensagem-aviso-biometria" role="alert"></div>
-            <button type="button" class="link-botao-simples" id="botao-usar-senha-em-vez">Entrar com senha em vez disso</button>
+            <button type="button" class="link-botao-simples" id="botao-usar-senha-em-vez">Usar senha de 8 dígitos</button>
         </div>
     </div>
 
-    <!-- Pergunta se a pessoa quer ativar a biometria — aparece só UMA VEZ,
-         logo depois de um login manual (senha ou Google) bem-sucedido nesse
-         aparelho, e só se o aparelho tiver suporte. Quem recusar sempre
-         pode ativar depois em Configurações → "Ativar Login com Biometria". -->
-    <div class="fundo-modal" id="fundo-modal-perguntar-biometria">
-        <div class="modal-lancamento">
-            <div class="cabecalho-modal">
-                <h3>Ativar login com biometria?</h3>
-            </div>
-            <p class="texto-explicativo-guardado">Da próxima vez que você abrir o Bull neste aparelho, você pode entrar com sua digital, rosto ou PIN, em vez de digitar a senha. Dá pra ativar ou desativar isso quando quiser, em Configurações.</p>
-            <div class="mensagem-aviso" id="mensagem-aviso-perguntar-biometria" role="alert"></div>
-            <button type="button" class="botao-enviar" id="botao-sim-ativar-biometria">
-                <span class="texto-botao">Ativar</span>
+    <!-- Senha de 8 dígitos do app: criar (1ª vez) ou digitar (quando a
+         biometria falha 3 vezes ou não existe neste aparelho) -->
+    <div class="tela-bloqueio-biometria" id="tela-pin" hidden>
+        <div class="conteudo-bloqueio-biometria">
+            <span class="selo-marca-carregamento">Bull</span>
+            <h2 class="titulo-pin" id="titulo-pin">Senha de 8 dígitos</h2>
+            <p class="texto-bloqueio-biometria" id="texto-pin"></p>
+            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"
+                   class="campo-pin" id="campo-pin" placeholder="••••••••" aria-label="Senha de 8 dígitos">
+            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"
+                   class="campo-pin" id="campo-pin-confirmar" placeholder="Repita a senha" aria-label="Repita a senha de 8 dígitos" hidden>
+            <div class="mensagem-aviso" id="mensagem-aviso-pin" role="alert"></div>
+            <button type="button" class="botao-enviar" id="botao-confirmar-pin">
+                <span class="texto-botao" id="texto-botao-pin">Entrar</span>
             </button>
-            <button type="button" class="link-botao-simples" id="botao-agora-nao-biometria" style="display:block; margin: 14px auto 0;">Agora não</button>
+            <button type="button" class="link-botao-simples" id="botao-esqueci-pin">Esqueci minha senha de 8 dígitos</button>
         </div>
     </div>
 

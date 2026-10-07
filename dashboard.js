@@ -253,6 +253,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let dadosOriginaisEmEdicao = null; // guarda os dados ANTES da edição, pra comparações corretas
     let saldoAtualDoMes = 0; // ganhos - gastos do mês selecionado (cálculo de sempre)
     let saldoExibidoETravado = 0; // o que REALMENTE aparece na tela e trava o Guardar
+    let bancoPrincipalResolvido = false; // vira true quando o app já sabe se existe banco principal e qual o saldo dele
     let saldoBancoPrincipalAtual = null; // null = sem banco principal (ou ainda não carregou)
     let nomeBancoPrincipalAtual = null;
     let pararDeEscutarSaldoBancoPrincipal = null;
@@ -272,6 +273,13 @@ document.addEventListener("DOMContentLoaded", function () {
     // banco principal muda (reativo) — as duas situações precisam
     // concordar em qual das duas fontes usar
     function atualizarNumeroGrandeDoSaldo() {
+        // Mês atual: o número certo é o do banco principal. Enquanto ainda não
+        // chegou, mostra um traço em vez de um valor errado (era o "-400"
+        // que aparecia na abertura e só corrigia ao trocar de mês)
+        if (ehMesAtualReal() && !bancoPrincipalResolvido) {
+            totalSaldoEl.textContent = "—";
+            return;
+        }
         if (ehMesAtualReal() && saldoBancoPrincipalAtual !== null) {
             saldoExibidoETravado = saldoBancoPrincipalAtual;
             totalSaldoEl.textContent = formatarMoeda(saldoBancoPrincipalAtual);
@@ -313,6 +321,10 @@ document.addEventListener("DOMContentLoaded", function () {
         escutarLancamentosDoMes();
         escutarPendenciasDoMes();
         buscarGastosMesAnterior();
+        escutarSaldoBancoPrincipal();
+        setTimeout(() => {
+            if (!bancoPrincipalResolvido) { bancoPrincipalResolvido = true; atualizarNumeroGrandeDoSaldo(); }
+        }, 5000);
 
         // Busca do perfil isolada num try/catch — se essa consulta falhar
         // por uma instabilidade de rede bem na abertura do app (o momento
@@ -368,7 +380,6 @@ document.addEventListener("DOMContentLoaded", function () {
         await carregarComSeguranca("metas", carregarMetas);
         await carregarComSeguranca("bancos", carregarBancos);
         await carregarComSeguranca("resumo de bancos", atualizarResumoBancos);
-        escutarSaldoBancoPrincipal();
         await carregarComSeguranca("cartões", carregarCartoes);
         escutarResumoFaturaCartoes();
         if (!perfil.migracaoMesReferenciaConcluida) {
@@ -871,6 +882,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 pararDeEscutarSaldoBancoPrincipal = null;
             }
 
+            bancoPrincipalResolvido = true;
             if (snapshotBancos.empty) {
                 saldoBancoPrincipalAtual = null;
                 nomeBancoPrincipalAtual = null;
@@ -909,6 +921,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 saldoBancoPrincipalAtual = total;
                 atualizarNumeroGrandeDoSaldo();
             });
+        }, (erro) => {
+            console.error("Bull: erro ao escutar o banco principal —", erro);
+            bancoPrincipalResolvido = true;
+            atualizarNumeroGrandeDoSaldo();
         });
     }
 
