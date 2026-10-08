@@ -62,8 +62,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoSalvarCartao = document.getElementById("botao-salvar-cartao");
     const botaoRemoverCartao = document.getElementById("botao-remover-cartao");
 
-    const listaItensCartao = document.getElementById("lista-itens-cartao");
-    const itensCartaoVazio = document.getElementById("itens-cartao-vazio");
+
 
     const fundoModalPagarFatura = document.getElementById("fundo-modal-pagar-fatura");
     const botaoFecharPagarFatura = document.getElementById("botao-fechar-pagar-fatura");
@@ -94,6 +93,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let todosOsItensDoCartaoBruto = []; // snapshot bruto, antes de categorizar — guardado pra poder recategorizar sem nova busca
     let cartaoEmEdicaoId = null;
     let pagamentoFaturaPendente = null; // { itensNaoPagos, totalFatura, cartaoId, textoFatura }
+    const cartoesComFaturaAtualAberta = new Set(); // cartões com "ver itens da fatura atual" expandido
     const cartoesComDetalheAberto = new Set(); // quais cartões estão com "ver itens da fatura aberta" expandido
     let bancoRealEmEdicaoId = null;
 
@@ -371,7 +371,6 @@ document.addEventListener("DOMContentLoaded", function () {
         // Só a fatura FECHADA aparece na lista — o que ainda está
         // acumulando (itensDoProximoMes) continua guardado em memória, só
         // pro cálculo do "Você já gastou" no card, sem lista própria
-        renderizarListaDeItens(itensDeTodasAsFaturas, listaItensCartao, itensCartaoVazio);
     }
 
     function nomeDoCartao(cartaoId) {
@@ -487,7 +486,6 @@ document.addEventListener("DOMContentLoaded", function () {
         mostrarToast("Item excluído ✓");
     }
 
-    listaItensCartao.addEventListener("click", handlerCliqueListaItens);
 
     // ==========================================================================
     // FATURAS — uma por cartão cadastrado
@@ -698,16 +696,22 @@ document.addEventListener("DOMContentLoaded", function () {
             const limiteDisponivel = (cartao.limite || 0) - estado.totalGastoGeral;
             const estaAberto = cartoesComDetalheAberto.has(cartao.id);
 
-            let blocoVerItensHtml = "";
-            if (estado.itensAcumulandoAgora.length > 0) {
-                const linhasItens = estado.itensAcumulandoAgora.map((documento) => {
+            const nomeMes = (documentos) => NOMES_MESES[parseInt(documentos[0].data().mesReferencia.split("-")[1], 10) - 1];
+
+            // Botão + lista recolhível de itens (usado pra fatura atual e pra próxima)
+            const montarBlocoItens = (documentos, acao, aberto, textoAbrir, textoFechar, margemTopo) => {
+                if (documentos.length === 0) return "";
+                const linhas = documentos.map((documento) => {
                     const dados = documento.data();
+                    const etiqueta = dados.origem === "parcelado"
+                        ? `<span class="badge-parcela">Parcela ${dados.numeroParcela}/${dados.totalParcelas}</span>`
+                        : (dados.origem === "fixo" ? `<span class="badge-parcela">Fixo</span>` : "");
                     return `
-                        <li class="item-conta" style="padding: 8px 0;">
+                        <li class="item-conta" style="padding: 12px 16px; gap: 10px;">
                             <div class="info-conta">
-                                <div class="nome-conta" style="font-size: 13px;">${dados.descricao}</div>
+                                <div class="nome-conta" style="font-size: 13px;">${dados.descricao}${etiqueta}</div>
                             </div>
-                            <span class="valor-conta" style="font-size: 13px;">${formatarMoeda(dados.valor)}</span>
+                            <span class="valor-conta" style="font-size: 13px; ${dados.pago ? "color: var(--sucesso);" : ""}">${formatarMoeda(dados.valor)}</span>
                             <button class="botao-excluir-conta" data-id="${documento.id}" aria-label="Excluir item">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/>
@@ -716,16 +720,28 @@ document.addEventListener("DOMContentLoaded", function () {
                         </li>
                     `;
                 }).join("");
-
-                blocoVerItensHtml = `
-                    <button type="button" class="link-botao-simples" data-acao="toggle-detalhe" data-cartao="${cartao.id}" style="display:block; margin-top: 6px;">
-                        ${estaAberto ? "Esconder itens dessa fatura ▲" : "Ver itens dessa fatura ▼"}
+                return `
+                    <button type="button" class="link-botao-simples" data-acao="${acao}" data-cartao="${cartao.id}" style="display:block; margin-top: ${margemTopo}px;">
+                        ${aberto ? textoFechar : textoAbrir}
                     </button>
-                    <ul class="lista-contas" style="margin-top: 6px;" ${estaAberto ? "" : "hidden"}>
-                        ${linhasItens}
+                    <ul class="lista-contas" style="margin-top: 6px;" ${aberto ? "" : "hidden"}>
+                        ${linhas}
                     </ul>
                 `;
-            }
+            };
+
+            const itensFaturaAtual = [...estado.itensFechadosNaoPagos, ...estado.itensFechadosPagos];
+            const totalFaturaAtualItens = itensFaturaAtual.reduce((soma, documento) => soma + documento.data().valor, 0);
+            const blocoFaturaAtualHtml = montarBlocoItens(
+                itensFaturaAtual, "toggle-fatura-atual", cartoesComFaturaAtualAberta.has(cartao.id),
+                itensFaturaAtual.length > 0 ? `Ver itens da fatura atual (${nomeMes(itensFaturaAtual)}) · ${formatarMoeda(totalFaturaAtualItens)} ▼` : "",
+                "Esconder itens da fatura atual ▲", 10
+            );
+            const blocoVerItensHtml = montarBlocoItens(
+                estado.itensAcumulandoAgora, "toggle-detalhe", estaAberto,
+                estado.itensAcumulandoAgora.length > 0 ? `Ver itens da próxima fatura (${nomeMes(estado.itensAcumulandoAgora)}) · ${formatarMoeda(estado.totalAcumulandoAgora)} ▼` : "",
+                "Esconder itens da próxima fatura ▲", 14
+            );
 
             const item = document.createElement("div");
             item.className = "fatura-cartao-item";
@@ -734,11 +750,13 @@ document.addEventListener("DOMContentLoaded", function () {
                     <span class="fatura-cartao-nome">${cartao.nome}</span>
                     <button type="button" class="link-botao-simples" data-acao="editar" data-cartao="${cartao.id}">Editar</button>
                 </div>
+                <span class="fatura-cartao-vencimento" style="display:block; margin-bottom:2px;">Limite disponível</span>
                 <span class="fatura-cartao-valor">${formatarMoeda(limiteDisponivel)}</span>
                 <span class="fatura-cartao-vencimento">${textoDatas}</span>
                 <span class="fatura-cartao-vencimento" style="display:block; margin-top:2px;">Você já gastou ${formatarMoeda(estado.totalGastoGeral)} do cartão</span>
-                ${blocoVerItensHtml}
+                ${blocoFaturaAtualHtml}
                 ${blocoPagarHtml}
+                ${blocoVerItensHtml}
             `;
             listaFaturasCartoes.appendChild(item);
         });
@@ -759,6 +777,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const cartaoId = botao.dataset.cartao;
         const acao = botao.dataset.acao;
+
+        if (acao === "toggle-fatura-atual") {
+            if (cartoesComFaturaAtualAberta.has(cartaoId)) {
+                cartoesComFaturaAtualAberta.delete(cartaoId);
+            } else {
+                cartoesComFaturaAtualAberta.add(cartaoId);
+            }
+            renderizarFaturas();
+            return;
+        }
 
         if (acao === "toggle-detalhe") {
             if (cartoesComDetalheAberto.has(cartaoId)) {

@@ -135,3 +135,31 @@
     color: var(--accent);
     border-color: var(--accent);
 }
+
+
+/* Filtro por forma de pagamento (Débito / PIX / Crédito / Dinheiro) */
+.chips-forma-pagamento {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.chip-forma {
+    background-color: var(--surface-alta);
+    border: 1px solid var(--borda);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-family: var(--fonte-corpo);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.chip-forma.ativo {
+    background-color: var(--text-primary);
+    border-color: var(--text-primary);
+    color: var(--bg-deep);
+}

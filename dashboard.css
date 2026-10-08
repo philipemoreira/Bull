@@ -1565,3 +1565,7 @@ html.privacidade-ativa .botao-privacidade {
     color: var(--sobre-acento);
     transform: scale(1.05);
 }
+
+.botao-selecionar-lembretes[hidden] {
+    display: none;
+}

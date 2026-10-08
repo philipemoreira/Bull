@@ -150,6 +150,17 @@ document.addEventListener("DOMContentLoaded", function () {
     // ==========================================================================
     // FILTROS — por mês (input type=month) e por valor (busca numérica)
     // ==========================================================================
+    // Filtro por forma de pagamento (chips)
+    let formaPagamentoFiltrada = "";
+    const chipsFormaPagamento = document.querySelectorAll(".chip-forma");
+    chipsFormaPagamento.forEach((chip) => {
+        chip.addEventListener("click", () => {
+            formaPagamentoFiltrada = chip.dataset.forma;
+            chipsFormaPagamento.forEach((outro) => outro.classList.toggle("ativo", outro === chip));
+            aplicarFiltrosERenderizar();
+        });
+    });
+
     filtroMes.addEventListener("change", aplicarFiltrosERenderizar);
     filtroValor.addEventListener("input", aplicarFiltrosERenderizar);
     filtroTexto.addEventListener("input", aplicarFiltrosERenderizar);
@@ -173,6 +184,10 @@ document.addEventListener("DOMContentLoaded", function () {
         let filtrados = todosJuntos.filter(
             (documento) => !(documento.data().categoria === "Guardar Dinheiro" && documento.data().valor < 0)
         );
+
+        if (formaPagamentoFiltrada) {
+            filtrados = filtrados.filter((documento) => documento.data().formaPagamento === formaPagamentoFiltrada);
+        }
 
         if (filtroMes.value) {
             filtrados = filtrados.filter((documento) => {
