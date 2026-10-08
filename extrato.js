@@ -4,22 +4,8 @@ import {
     collection, addDoc, deleteDoc, doc, query, where, orderBy, onSnapshot, getDocs, Timestamp, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { montarLancamentosDeCartao } from "./cartaoNoExtrato.js";
+import { corDaCategoria, registrarCategorias } from "./cores.js";
 
-// Mesma paleta e mesmo cálculo de cor por categoria do Dashboard — repetido
-// aqui (não dá pra importar entre esses arquivos soltos) pra categoria
-// aparecer com a MESMA cor em toda tela, sempre.
-const PALETA_CATEGORIAS = [
-    "#3987E5", "#D95926", "#199E70", "#C98500", "#9085E9",
-    "#D55181", "#E66767", "#5EEAD4", "#F5D76E", "#34D399"
-];
-function corDaCategoria(nomeCategoria) {
-    if (nomeCategoria === "Guardado") return "#60A5FA";
-    let hash = 0;
-    for (let i = 0; i < nomeCategoria.length; i++) {
-        hash = (hash * 31 + nomeCategoria.charCodeAt(i)) >>> 0;
-    }
-    return PALETA_CATEGORIAS[hash % PALETA_CATEGORIAS.length];
-}
 
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -179,6 +165,8 @@ document.addEventListener("DOMContentLoaded", function () {
             return (dados.criadoEm && dados.criadoEm.toDate ? dados.criadoEm.toDate() : dados.data.toDate()).getTime();
         };
         const comprasDoCartao = montarLancamentosDeCartao(docsComprasCartao, nomesCartoes);
+        // Dá cor diferente a cada categoria que existe (igual às outras telas)
+        registrarCategorias([...todosOsLancamentos, ...comprasDoCartao].map((d) => d.data().categoria));
         const todosJuntos = [...todosOsLancamentos, ...comprasDoCartao].sort((a, b) => dataParaOrdenar(b) - dataParaOrdenar(a));
 
         let filtrados = todosJuntos.filter(

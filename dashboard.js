@@ -6,30 +6,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { iniciarModoPrivacidade } from "./privacidade.js";
 import { montarLancamentosDeCartao } from "./cartaoNoExtrato.js";
+import { corDaCategoria, registrarCategorias } from "./cores.js";
 
 const CATEGORIAS_PADRAO = {
     gasto: ["Outros"],
     ganho: ["Outros"]
 };
-
-// Cores fixas por categoria no gráfico de gastos — cada categoria sempre
-// cai na mesma cor (calculada a partir do próprio nome), então "Mercado"
-// é sempre a mesma cor em qualquer mês, em vez de mudar conforme o ranking
-// de quem gastou mais. "Guardado" tem cor própria reservada, igual ao
-// pontinho usado pra ele no resto do app.
-const PALETA_CATEGORIAS = [
-    "#3987E5", "#D95926", "#199E70", "#C98500", "#9085E9",
-    "#D55181", "#E66767", "#5EEAD4", "#F5D76E", "#34D399"
-];
-
-function corDaCategoria(nomeCategoria) {
-    if (nomeCategoria === "Guardado") return "#60A5FA";
-    let hash = 0;
-    for (let i = 0; i < nomeCategoria.length; i++) {
-        hash = (hash * 31 + nomeCategoria.charCodeAt(i)) >>> 0;
-    }
-    return PALETA_CATEGORIAS[hash % PALETA_CATEGORIAS.length];
-}
 
 const NOMES_MESES = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -751,6 +733,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 categoriasCustomizadas[dados.tipo].push({ nome: dados.nome, id: documento.id });
             }
         });
+        // Dá uma cor diferente pra cada categoria sua
+        registrarCategorias(categoriasCustomizadas.gasto.map((c) => c.nome));
     }
 
     async function carregarOrcamentos() {
@@ -3588,6 +3572,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const circunferencia = 2 * Math.PI * raio;
         let deslocamentoAcumulado = 0;
 
+        registrarCategorias(categorias.map((item) => item.nome));
         categorias.forEach((item, indice) => {
             const percentual = item.valor / totalGeral;
             const cor = corDaCategoria(item.nome);
