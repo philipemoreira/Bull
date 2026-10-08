@@ -679,16 +679,21 @@ document.addEventListener("DOMContentLoaded", function () {
             let blocoPagarHtml = "";
             if (estado.totalFechadoNaoPago > 0) {
                 blocoPagarHtml = `
-                    <div style="margin-top: 14px; padding: 10px; background: rgba(245, 215, 110, 0.1); border-radius: 8px;">
-                        <span class="fatura-cartao-vencimento" style="display:block; margin-bottom:4px;">Fatura fechada — pronta pra pagar</span>
-                        <span class="fatura-cartao-valor" style="font-size: 18px;">${formatarMoeda(estado.totalFechadoNaoPago)}</span>
-                        <button type="button" class="botao-retirar" data-acao="marcar" data-cartao="${cartao.id}">Marcar como pago</button>
+                    <div class="cc-pagar">
+                        <div class="cc-pagar-info">
+                            <span class="cc-pagar-rotulo">Fatura fechada · pronta pra pagar</span>
+                            <span class="cc-pagar-valor">${formatarMoeda(estado.totalFechadoNaoPago)}</span>
+                        </div>
+                        <button type="button" class="cc-pagar-botao" data-acao="marcar" data-cartao="${cartao.id}">Marcar como pago</button>
                     </div>
                 `;
             } else if (estado.itensFechadosPagos.length > 0) {
                 blocoPagarHtml = `
-                    <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--borda);">
-                        <span class="fatura-cartao-vencimento" style="display:block; margin-bottom:4px;">✓ Fatura fechada, paga — ${formatarMoeda(estado.totalFechadoPago)}</span>
+                    <div class="cc-pagar paga">
+                        <div class="cc-pagar-info">
+                            <span class="cc-pagar-rotulo">✓ Fatura fechada · paga</span>
+                            <span class="cc-pagar-valor">${formatarMoeda(estado.totalFechadoPago)}</span>
+                        </div>
                         <button type="button" class="link-botao-simples" data-acao="desmarcar" data-cartao="${cartao.id}">Desmarcar</button>
                     </div>
                 `;
@@ -698,22 +703,27 @@ document.addEventListener("DOMContentLoaded", function () {
             const estaAberto = cartoesComDetalheAberto.has(cartao.id);
 
             const nomeMes = (documentos) => NOMES_MESES[parseInt(documentos[0].data().mesReferencia.split("-")[1], 10) - 1];
+            const dataDaCompra = (documento) => {
+                const criado = documento.data().criadoEm;
+                return criado && criado.toDate ? criado.toDate().getTime() : 0;
+            };
 
-            // Botão + lista recolhível de itens (usado pra fatura atual e pra próxima)
-            const montarBlocoItens = (documentos, acao, aberto, textoAbrir, textoFechar, margemTopo) => {
+            // Linha clicável (resumo) + lista recolhível de itens, usada pra
+            // fatura atual e pra próxima
+            const montarBlocoItens = (documentos, acao, aberto, rotulo, destaque) => {
                 if (documentos.length === 0) return "";
-                const linhas = documentos.map((documento) => {
+                const total = documentos.reduce((soma, documento) => soma + documento.data().valor, 0);
+                const ordenados = [...documentos].sort((a, b) => dataDaCompra(b) - dataDaCompra(a));
+                const linhas = ordenados.map((documento) => {
                     const dados = documento.data();
                     const etiqueta = dados.origem === "parcelado"
                         ? `<span class="badge-parcela">Parcela ${dados.numeroParcela}/${dados.totalParcelas}</span>`
                         : (dados.origem === "fixo" ? `<span class="badge-parcela">Fixo</span>` : "");
                     return `
-                        <li class="item-conta" style="padding: 12px 16px; gap: 10px;">
-                            <div class="info-conta">
-                                <div class="nome-conta" style="font-size: 13px;">${dados.descricao}${etiqueta}</div>
-                            </div>
-                            <span class="valor-conta" style="font-size: 13px; ${dados.pago ? "color: var(--sucesso);" : ""}">${formatarMoeda(dados.valor)}</span>
-                            <button class="botao-excluir-conta" data-id="${documento.id}" aria-label="Excluir item">
+                        <li class="cc-item">
+                            <div class="cc-item-nome">${dados.descricao}${etiqueta}</div>
+                            <span class="cc-item-valor ${dados.pago ? "paga" : ""}">${formatarMoeda(dados.valor)}</span>
+                            <button class="botao-excluir-conta cc-item-excluir" data-id="${documento.id}" aria-label="Excluir item">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/>
                                 </svg>
@@ -722,39 +732,57 @@ document.addEventListener("DOMContentLoaded", function () {
                     `;
                 }).join("");
                 return `
-                    <button type="button" class="link-botao-simples" data-acao="${acao}" data-cartao="${cartao.id}" style="display:block; margin-top: ${margemTopo}px;">
-                        ${aberto ? textoFechar : textoAbrir}
+                    <button type="button" class="cc-linha-toggle ${aberto ? "aberta" : ""}" data-acao="${acao}" data-cartao="${cartao.id}" aria-expanded="${aberto}">
+                        <span class="cc-linha-texto">
+                            <span class="cc-linha-titulo">${rotulo} · ${nomeMes(documentos)}</span>
+                            <span class="cc-linha-sub">${documentos.length} ${documentos.length === 1 ? "item" : "itens"}</span>
+                        </span>
+                        <span class="cc-linha-valor">${formatarMoeda(total)}</span>
+                        <svg class="cc-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
-                    <ul class="lista-contas" style="margin-top: 6px;" ${aberto ? "" : "hidden"}>
-                        ${linhas}
-                    </ul>
+                    <ul class="cc-lista" ${aberto ? "" : "hidden"}>${linhas}</ul>
                 `;
             };
 
             const itensFaturaAtual = [...estado.itensFechadosNaoPagos, ...estado.itensFechadosPagos];
-            const totalFaturaAtualItens = itensFaturaAtual.reduce((soma, documento) => soma + documento.data().valor, 0);
             const blocoFaturaAtualHtml = montarBlocoItens(
-                itensFaturaAtual, "toggle-fatura-atual", cartoesComFaturaAtualAberta.has(cartao.id),
-                itensFaturaAtual.length > 0 ? `Ver itens da fatura atual (${nomeMes(itensFaturaAtual)}) · ${formatarMoeda(totalFaturaAtualItens)} ▼` : "",
-                "Esconder itens da fatura atual ▲", 10
+                itensFaturaAtual, "toggle-fatura-atual", cartoesComFaturaAtualAberta.has(cartao.id), "Fatura atual"
             );
             const blocoVerItensHtml = montarBlocoItens(
-                estado.itensAcumulandoAgora, "toggle-detalhe", estaAberto,
-                estado.itensAcumulandoAgora.length > 0 ? `Ver itens da próxima fatura (${nomeMes(estado.itensAcumulandoAgora)}) · ${formatarMoeda(estado.totalAcumulandoAgora)} ▼` : "",
-                "Esconder itens da próxima fatura ▲", 14
+                estado.itensAcumulandoAgora, "toggle-detalhe", estaAberto, "Próxima fatura"
             );
 
+            // Datas curtas (dd/mm) em "etiquetas"
+            let etiquetasDatasHtml = "";
+            if (estado.mesReferenciaParaExibir) {
+                const curta = (d) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+                etiquetasDatasHtml = `
+                    <div class="cc-datas">
+                        <span class="cc-data"><span class="cc-data-rotulo">Fecha</span> ${curta(dataDeFechamento(estado.mesReferenciaParaExibir, diaFechamento))}</span>
+                        <span class="cc-data"><span class="cc-data-rotulo">Vence</span> ${curta(dataDeVencimento(estado.mesReferenciaParaExibir, diaFechamento, diaVencimento))}</span>
+                    </div>
+                `;
+            }
+
+            // Barra de uso do limite
+            const limiteTotal = cartao.limite || 0;
+            const percentualUsado = limiteTotal > 0 ? Math.min(100, Math.max(0, (estado.totalGastoGeral / limiteTotal) * 100)) : 0;
+            const blocoLimiteBarraHtml = limiteTotal > 0 ? `
+                <div class="cc-barra"><div class="cc-barra-preenchimento ${percentualUsado >= 85 ? "alto" : ""}" style="width: ${percentualUsado}%;"></div></div>
+                <span class="cc-limite-texto">${formatarMoeda(estado.totalGastoGeral)} de ${formatarMoeda(limiteTotal)} usados</span>
+            ` : `<span class="cc-limite-texto">Você já gastou ${formatarMoeda(estado.totalGastoGeral)} do cartão</span>`;
+
             const item = document.createElement("div");
-            item.className = "fatura-cartao-item";
+            item.className = "fatura-cartao-item cc-card";
             item.innerHTML = `
-                <div class="fatura-cartao-cabecalho">
-                    <span class="fatura-cartao-nome">${cartao.nome}</span>
-                    <button type="button" class="link-botao-simples" data-acao="editar" data-cartao="${cartao.id}">Editar</button>
+                <div class="cc-cabecalho">
+                    <span class="cc-nome">${cartao.nome}</span>
+                    <button type="button" class="cc-editar" data-acao="editar" data-cartao="${cartao.id}">Editar</button>
                 </div>
-                <span class="fatura-cartao-vencimento" style="display:block; margin-bottom:2px;">Limite disponível</span>
-                <span class="fatura-cartao-valor">${formatarMoeda(limiteDisponivel)}</span>
-                <span class="fatura-cartao-vencimento">${textoDatas}</span>
-                <span class="fatura-cartao-vencimento" style="display:block; margin-top:2px;">Você já gastou ${formatarMoeda(estado.totalGastoGeral)} do cartão</span>
+                <span class="cc-rotulo">Limite disponível</span>
+                <span class="cc-valor-grande">${formatarMoeda(limiteDisponivel)}</span>
+                ${blocoLimiteBarraHtml}
+                ${etiquetasDatasHtml}
                 ${blocoFaturaAtualHtml}
                 ${blocoPagarHtml}
                 ${blocoVerItensHtml}

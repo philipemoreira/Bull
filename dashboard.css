@@ -1569,3 +1569,253 @@ html.privacidade-ativa .botao-privacidade {
 .botao-selecionar-lembretes[hidden] {
     display: none;
 }
+
+
+/* ==========================================================================
+   CARD DE CARTÃO DE CRÉDITO (tela Bancos e Cartões)
+   ========================================================================== */
+.cc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px;
+}
+
+.cc-cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.cc-nome {
+    font-family: var(--fonte-titulo, inherit);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.cc-editar {
+    background: transparent;
+    border: 1px solid var(--borda);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-family: var(--fonte-corpo);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.cc-rotulo {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.cc-valor-grande {
+    font-family: var(--fonte-titulo, inherit);
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.15;
+}
+
+.cc-barra {
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    margin-top: 6px;
+}
+
+.cc-barra-preenchimento {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 0.4s ease;
+}
+
+.cc-barra-preenchimento.alto {
+    background: #E5484D;
+}
+
+.cc-limite-texto {
+    font-size: 12.5px;
+    color: var(--text-muted);
+}
+
+.cc-datas {
+    display: flex;
+    gap: 8px;
+    margin: 10px 0 6px;
+}
+
+.cc-data {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--surface-alta);
+    border: 1px solid var(--borda);
+    border-radius: 999px;
+    padding: 6px 12px;
+}
+
+.cc-data-rotulo {
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-right: 4px;
+}
+
+/* Linha que abre/fecha a lista de itens de uma fatura */
+.cc-linha-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    margin-top: 8px;
+    padding: 13px 14px;
+    background: var(--surface-alta);
+    border: 1px solid var(--borda);
+    border-radius: 12px;
+    font-family: var(--fonte-corpo);
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+}
+
+.cc-linha-texto {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.cc-linha-titulo {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.cc-linha-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.cc-linha-valor {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.cc-seta {
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.cc-linha-toggle.aberta .cc-seta {
+    transform: rotate(180deg);
+}
+
+.cc-lista {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+    border: 1px solid var(--borda);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.cc-lista[hidden] {
+    display: none;
+}
+
+.cc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--borda);
+}
+
+.cc-item:last-child {
+    border-bottom: 0;
+}
+
+.cc-item-nome {
+    flex: 1;
+    min-width: 0;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.cc-item-valor {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.cc-item-valor.paga {
+    color: var(--sucesso);
+}
+
+.cc-item-excluir {
+    flex-shrink: 0;
+}
+
+/* Fatura fechada, pronta pra pagar — o bloco de destaque do card */
+.cc-pagar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    padding: 14px;
+    background: rgba(245, 215, 110, 0.10);
+    border: 1px solid rgba(245, 215, 110, 0.25);
+    border-radius: 12px;
+}
+
+.cc-pagar.paga {
+    background: rgba(80, 200, 140, 0.08);
+    border-color: rgba(80, 200, 140, 0.25);
+}
+
+.cc-pagar-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cc-pagar-rotulo {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.cc-pagar-valor {
+    font-family: var(--fonte-titulo, inherit);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.cc-pagar-botao {
+    background: var(--text-primary);
+    color: var(--bg-deep);
+    border: 0;
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-family: var(--fonte-corpo);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
