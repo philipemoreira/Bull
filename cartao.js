@@ -166,9 +166,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // Uma fatura é considerada "fechada" (pronta pra pagar) a partir do
-    // PRÓPRIO dia de fechamento (inclusive) — porque uma compra feita
-    // nesse mesmo dia já vai pra fatura seguinte, então esse dia marca o
-    // corte: a fatura anterior já está travada
+    // PRÓPRIO dia de fechamento (inclusive) — uma compra feita nesse dia já
+    // vai pra fatura seguinte
     function faturaJaFechou(mesReferencia, diaFechamento) {
         const hoje = new Date();
         const hojeSoData = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
@@ -178,7 +177,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // Calcula em qual fatura (mês) uma compra feita HOJE deveria cair,
     // dado o dia de fechamento do cartão escolhido: antes do fechamento,
     // entra na fatura que ainda vai fechar esse mês; no dia do fechamento
-    // (inclusive) ou depois, já pula pra fatura do mês seguinte
+    // (inclusive) ou depois, já pula pra fatura do mês seguinte (igual ao Nubank:
+    // no dia do fechamento é o "melhor dia pra compras")
     function calcularMesReferenciaFatura(hoje, diaFechamento) {
         if (hoje.getDate() < diaFechamento) {
             return mesReferenciaString(hoje);
@@ -430,7 +430,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 item.innerHTML = `
                     <div class="info-conta">
                         <div class="nome-conta">${dados.descricao}${badgeParcela}${badgeCartaoHtml}</div>
-                        <div class="meta-conta">${dados.pago ? "Já paga" : `Fatura de ${formatarMesReferencia(dados.mesReferencia)}`}</div>
+                        <div class="meta-conta">${dados.pago ? "Já paga" : `Fatura de ${formatarMesReferencia(dados.mesReferencia)}`}${listaDeCartoes.some((c) => c.id === dados.cartaoId) ? "" : " · não entra no total (cartão removido)"}</div>
                     </div>
                     <span class="valor-conta" style="color: ${dados.pago ? "var(--sucesso)" : "#F5D76E"};">${formatarMoeda(dados.valor)}</span>
                     <button class="botao-excluir-conta" data-id="${documento.id}" aria-label="Excluir item">

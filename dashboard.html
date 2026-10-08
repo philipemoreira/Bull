@@ -387,6 +387,32 @@
         </div>
     </div>
 
+    <div class="fundo-modal" id="fundo-modal-editar-pendencia">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Editar pagamento</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-editar-pendencia" aria-label="Fechar">✕</button>
+            </div>
+            <div class="campo">
+                <label for="campo-editar-pendencia-nome">Nome</label>
+                <input type="text" id="campo-editar-pendencia-nome" maxlength="60" autocomplete="off">
+            </div>
+            <div class="campo">
+                <label for="campo-editar-pendencia-valor">Valor</label>
+                <input type="text" id="campo-editar-pendencia-valor" inputmode="numeric" autocomplete="off" placeholder="0,00">
+            </div>
+            <label class="linha-checkbox-editar" id="linha-editar-pendencia-grupo" hidden style="display:flex; gap:10px; align-items:flex-start; margin: 4px 0 12px; font-size:14px; color:var(--text-muted);">
+                <input type="checkbox" id="campo-editar-pendencia-grupo" checked style="margin-top:3px;">
+                <span id="texto-editar-pendencia-grupo">Aplicar também aos próximos meses ainda não pagos</span>
+            </label>
+            <div class="mensagem-aviso" id="mensagem-aviso-editar-pendencia" role="alert"></div>
+            <button type="button" class="botao-enviar" id="botao-salvar-editar-pendencia">
+                <span class="texto-botao">Salvar</span>
+                <span class="spinner-botao" hidden></span>
+            </button>
+        </div>
+    </div>
+
     <div class="fundo-modal" id="fundo-modal-editar-pix">
         <div class="modal-lancamento">
             <div class="cabecalho-modal">

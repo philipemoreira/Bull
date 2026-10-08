@@ -1546,7 +1546,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // Calcula em qual fatura (mês) uma compra feita HOJE deveria cair,
     // dado o dia de fechamento do cartão escolhido: antes do fechamento,
     // entra na fatura que ainda vai fechar esse mês; no dia do fechamento
-    // (inclusive) ou depois, já pula pra fatura do mês seguinte
+    // (inclusive) ou depois, já pula pra fatura do mês seguinte (igual ao Nubank:
+    // no dia do fechamento é o "melhor dia pra compras")
     function calcularMesReferenciaFatura(hoje, diaFechamento) {
         if (hoje.getDate() < diaFechamento) {
             return mesReferenciaString(hoje);
@@ -2027,7 +2028,9 @@ document.addEventListener("DOMContentLoaded", function () {
             fecharModal();
 
             if (noCartaoCredito) {
-                mostrarToast("Compra no crédito registrada ✓ — entra na próxima fatura, não desconta o saldo agora.");
+                const [anoFatura, mesFatura] = mesDaFaturaCredito.split("-").map(Number);
+                const nomeMesFatura = new Date(anoFatura, mesFatura - 1, 1).toLocaleDateString("pt-BR", { month: "long" });
+                mostrarToast(`Compra no crédito registrada ✓ — entra na fatura de ${nomeMesFatura}, não desconta o saldo agora.`);
             } else if (ehParcelado) {
                 mostrarToast(`Parcelamento criado ✓ (${numeroParcelas}x)`);
             } else if (campoFixo.checked) {
@@ -2220,7 +2223,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
         pararDeEscutarResumoFaturaCartoes = onSnapshot(consulta, (snapshot) => {
             const todosOsItens = snapshot.docs;
-            let totalGeral = 0;
+            let totalFechadoGeral = 0;
+            let totalAcumulandoGeral = 0;
 
             // As compras no cartão também entram no gráfico por categoria
             // (ver renderizarGrafico) — redesenha quando elas mudarem
@@ -2249,10 +2253,11 @@ document.addEventListener("DOMContentLoaded", function () {
                     .reduce((soma, documento) => soma + documento.data().valor, 0);
                 const totalAcumulandoAgora = itensAcumulandoAgora.reduce((soma, documento) => soma + documento.data().valor, 0);
 
-                totalGeral += totalFechadoNaoPago + totalAcumulandoAgora;
+                totalFechadoGeral += totalFechadoNaoPago;
+                totalAcumulandoGeral += totalAcumulandoAgora;
             });
 
-            renderizarFaturaCartao(totalGeral);
+            renderizarFaturaCartao(totalFechadoGeral, totalAcumulandoGeral);
         });
     }
 
@@ -2363,6 +2368,8 @@ document.addEventListener("DOMContentLoaded", function () {
             linhaChavePixHtml = `<div class="linha-acoes-pix" style="display:flex; gap:14px; margin-top:6px;">${botaoCopiar}${botaoEditar}</div>`;
         }
 
+        const botaoEditarPendenciaHtml = dados.noCartao ? "" : `<div class="linha-acoes-pix" style="margin-top:6px;"><button type="button" class="link-botao-simples botao-editar-pendencia" data-id="${documento.id}">Editar nome ou valor</button></div>`;
+
         const botaoPagoHtml = mostrarBotaoPago ? `
                 <button class="botao-marcar-pago ${dados.pago ? "pago" : ""}" data-id="${documento.id}" data-pago="${dados.pago}">
                     ${dados.pago ? "✓ Paga" : "Marcar como paga"}
@@ -2378,6 +2385,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <div class="meta-conta">${dados.categoria} · Vence dia ${dados.diaDoMes}</div>
                 ${textoValorTotal}
                 ${textoPagoEm}
+                ${botaoEditarPendenciaHtml}
                 ${linhaFormaPagamentoHtml}
                 ${linhaChavePixHtml}
             </div>
@@ -2407,8 +2415,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // Recebe o total já calculado (fatura fechada não paga + fatura
     // acumulando agora, somado de todos os cartões) — a mesma conta que a
     // tela do Cartão faz pra cada cartão individualmente
-    function renderizarFaturaCartao(totalFatura) {
-        if (totalFatura <= 0) {
+    function renderizarFaturaCartao(totalFechado, totalAcumulando) {
+        if (totalFechado <= 0 && totalAcumulando <= 0) {
             linkResumoFatura.hidden = true;
             atualizarVisibilidadeSecaoBancosCartoes();
             return;
@@ -2416,11 +2424,20 @@ document.addEventListener("DOMContentLoaded", function () {
         linkResumoFatura.hidden = false;
         atualizarVisibilidadeSecaoBancosCartoes();
 
-        // Combina o total de TODOS os cartões cadastrados — o detalhe de cada
-        // um (nome, vencimento, fatura própria) fica na tela do Cartão
-        tituloFaturaCartao.textContent = "Fatura Cartões de Crédito";
-        valorFaturaCartao.textContent = formatarMoeda(totalFatura);
-        vencimentoFaturaCartao.textContent = "Ver detalhes por cartão";
+        // O número grande é a fatura FECHADA, a que você vai pagar (igual ao
+        // app do banco). O que está se formando pra próxima aparece embaixo.
+        // O detalhe de cada cartão fica na tela do Cartão.
+        if (totalFechado > 0) {
+            tituloFaturaCartao.textContent = "Fatura fechada · a pagar";
+            valorFaturaCartao.textContent = formatarMoeda(totalFechado);
+            vencimentoFaturaCartao.textContent = totalAcumulando > 0
+                ? `Próxima fatura: ${formatarMoeda(totalAcumulando)} · ver detalhes por cartão`
+                : "Ver detalhes por cartão";
+        } else {
+            tituloFaturaCartao.textContent = "Fatura em aberto";
+            valorFaturaCartao.textContent = formatarMoeda(totalAcumulando);
+            vencimentoFaturaCartao.textContent = "Ver detalhes por cartão";
+        }
     }
 
     // ==========================================================================
@@ -2488,6 +2505,111 @@ document.addEventListener("DOMContentLoaded", function () {
             spinner.hidden = true;
         }
     });
+    // ==========================================================================
+    // EDITAR NOME OU VALOR DE UM PAGAMENTO PENDENTE
+    // ==========================================================================
+    const fundoModalEditarPendencia = document.getElementById("fundo-modal-editar-pendencia");
+    const campoEditarPendenciaNome = document.getElementById("campo-editar-pendencia-nome");
+    const campoEditarPendenciaValor = document.getElementById("campo-editar-pendencia-valor");
+    const linhaEditarPendenciaGrupo = document.getElementById("linha-editar-pendencia-grupo");
+    const campoEditarPendenciaGrupo = document.getElementById("campo-editar-pendencia-grupo");
+    const mensagemAvisoEditarPendencia = document.getElementById("mensagem-aviso-editar-pendencia");
+    const botaoSalvarEditarPendencia = document.getElementById("botao-salvar-editar-pendencia");
+    const botaoFecharEditarPendencia = document.getElementById("botao-fechar-editar-pendencia");
+    let pendenciaEmEdicao = null; // { id, dados }
+
+    aplicarMascaraValor(campoEditarPendenciaValor);
+
+    async function abrirModalEditarPendencia(id) {
+        const snapshot = await getDoc(doc(db, "usuarios", uidAtual, "pendencias", id));
+        if (!snapshot.exists()) return;
+        const dados = snapshot.data();
+        pendenciaEmEdicao = { id, dados };
+
+        campoEditarPendenciaNome.value = dados.descricao || "";
+        campoEditarPendenciaValor.value = dados.valor.toFixed(2).replace(".", ",");
+        linhaEditarPendenciaGrupo.hidden = !dados.grupoId;
+        linhaEditarPendenciaGrupo.style.display = dados.grupoId ? "flex" : "none";
+        campoEditarPendenciaGrupo.checked = true;
+        mensagemAvisoEditarPendencia.classList.remove("visivel");
+        fundoModalEditarPendencia.classList.add("aberto");
+    }
+
+    function fecharModalEditarPendencia() {
+        fundoModalEditarPendencia.classList.remove("aberto");
+        pendenciaEmEdicao = null;
+    }
+    botaoFecharEditarPendencia.addEventListener("click", fecharModalEditarPendencia);
+    fundoModalEditarPendencia.addEventListener("click", (evento) => {
+        if (evento.target === fundoModalEditarPendencia) fecharModalEditarPendencia();
+    });
+
+    botaoSalvarEditarPendencia.addEventListener("click", async () => {
+        if (!pendenciaEmEdicao) return;
+        const novoNome = campoEditarPendenciaNome.value.trim();
+        const novoValor = paraNumero(campoEditarPendenciaValor.value);
+        mensagemAvisoEditarPendencia.classList.remove("visivel");
+
+        if (!novoNome) {
+            mensagemAvisoEditarPendencia.textContent = "Digita um nome.";
+            mensagemAvisoEditarPendencia.classList.add("visivel");
+            return;
+        }
+        if (!novoValor || novoValor <= 0) {
+            mensagemAvisoEditarPendencia.textContent = "Digita um valor maior que zero.";
+            mensagemAvisoEditarPendencia.classList.add("visivel");
+            return;
+        }
+
+        const spinner = botaoSalvarEditarPendencia.querySelector(".spinner-botao");
+        botaoSalvarEditarPendencia.disabled = true;
+        spinner.hidden = false;
+
+        try {
+            const { id, dados } = pendenciaEmEdicao;
+            const lote = writeBatch(db);
+            const mudancas = { descricao: novoNome, valor: novoValor };
+            const idsAtualizados = new Set([id]);
+
+            // Parcelado aplicado em todas: o "Total da compra" acompanha o novo valor da parcela
+            const mudancasPendencia = (dados.origem === "parcelado" && dados.grupoId && campoEditarPendenciaGrupo.checked)
+                ? { ...mudancas, valorTotalCompra: Math.round(novoValor * dados.totalParcelas * 100) / 100 }
+                : mudancas;
+
+            lote.update(doc(db, "usuarios", uidAtual, "pendencias", id), mudancasPendencia);
+
+            // Se essa já estava paga, o lançamento que ela gerou no extrato
+            // também precisa acompanhar — senão saldo e extrato ficam errados
+            if (dados.pago && dados.lancamentoId) {
+                lote.update(doc(db, "usuarios", uidAtual, "lancamentos", dados.lancamentoId), mudancas);
+            }
+
+            // Fixo/Parcelado: aplica também nas próximas ainda não pagas
+            if (dados.grupoId && campoEditarPendenciaGrupo.checked) {
+                const resultado = await getDocs(query(
+                    collection(db, "usuarios", uidAtual, "pendencias"),
+                    where("grupoId", "==", dados.grupoId),
+                    where("pago", "==", false)
+                ));
+                resultado.forEach((documento) => {
+                    if (idsAtualizados.has(documento.id)) return;
+                    lote.update(documento.ref, mudancasPendencia);
+                    idsAtualizados.add(documento.id);
+                });
+            }
+
+            await lote.commit();
+            fecharModalEditarPendencia();
+            mostrarToast("Pagamento atualizado ✓");
+        } catch (erro) {
+            mensagemAvisoEditarPendencia.textContent = "Não deu pra salvar agora. Confere sua internet e tenta de novo.";
+            mensagemAvisoEditarPendencia.classList.add("visivel");
+        } finally {
+            botaoSalvarEditarPendencia.disabled = false;
+            spinner.hidden = true;
+        }
+    });
+
     let escopoExclusaoEscolhido = null; // "so-essa" | "todas"
 
     function abrirModalEditarFormaPagamento(id, grupoId, formaAtual, bancoAtual, descricao) {
@@ -2668,6 +2790,12 @@ document.addEventListener("DOMContentLoaded", function () {
             } catch (erro) {
                 mostrarToast("Não deu pra copiar automaticamente — copia manualmente.");
             }
+            return;
+        }
+
+        const botaoEditarPendencia = evento.target.closest(".botao-editar-pendencia");
+        if (botaoEditarPendencia) {
+            abrirModalEditarPendencia(botaoEditarPendencia.dataset.id);
             return;
         }
 
