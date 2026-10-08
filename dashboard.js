@@ -2519,6 +2519,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const fundoModalEditarPendencia = document.getElementById("fundo-modal-editar-pendencia");
     const campoEditarPendenciaNome = document.getElementById("campo-editar-pendencia-nome");
     const campoEditarPendenciaValor = document.getElementById("campo-editar-pendencia-valor");
+    const campoEditarPendenciaCategoria = document.getElementById("campo-editar-pendencia-categoria");
     const linhaEditarPendenciaGrupo = document.getElementById("linha-editar-pendencia-grupo");
     const campoEditarPendenciaGrupo = document.getElementById("campo-editar-pendencia-grupo");
     const mensagemAvisoEditarPendencia = document.getElementById("mensagem-aviso-editar-pendencia");
@@ -2536,6 +2537,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
         campoEditarPendenciaNome.value = dados.descricao || "";
         campoEditarPendenciaValor.value = dados.valor.toFixed(2).replace(".", ",");
+
+        // Categorias de gasto (as padrão + as suas). Se a categoria atual do
+        // item não estiver na lista (apagada, por exemplo), ela aparece mesmo assim
+        const nomesCategorias = [...new Set([
+            ...CATEGORIAS_PADRAO.gasto,
+            ...categoriasCustomizadas.gasto.map((c) => c.nome)
+        ])];
+        if (dados.categoria && !nomesCategorias.includes(dados.categoria)) nomesCategorias.push(dados.categoria);
+        campoEditarPendenciaCategoria.innerHTML = "";
+        nomesCategorias.forEach((nome) => {
+            const opcao = document.createElement("option");
+            opcao.value = nome;
+            opcao.textContent = nome;
+            campoEditarPendenciaCategoria.appendChild(opcao);
+        });
+        campoEditarPendenciaCategoria.value = dados.categoria || "Outros";
+
         linhaEditarPendenciaGrupo.hidden = !dados.grupoId;
         linhaEditarPendenciaGrupo.style.display = dados.grupoId ? "flex" : "none";
         campoEditarPendenciaGrupo.checked = true;
@@ -2576,7 +2594,7 @@ document.addEventListener("DOMContentLoaded", function () {
         try {
             const { id, dados } = pendenciaEmEdicao;
             const lote = writeBatch(db);
-            const mudancas = { descricao: novoNome, valor: novoValor };
+            const mudancas = { descricao: novoNome, valor: novoValor, categoria: campoEditarPendenciaCategoria.value || dados.categoria };
             const idsAtualizados = new Set([id]);
 
             // Parcelado aplicado em todas: o "Total da compra" acompanha o novo valor da parcela
@@ -2862,14 +2880,27 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        const confirmouPagar = await confirmarComTelinha("Tem certeza de que esse pagamento já foi feito? Isso vai descontar o valor do seu saldo.");
-        if (!confirmouPagar) return;
-
         // Marcar como paga: busca os dados da própria pendência pra criar o
         // lançamento de verdade (é isso que desconta do saldo e aparece no extrato)
         const snapshotPendencia = await getDoc(referenciaPendencia);
         if (!snapshotPendencia.exists()) return;
         const dadosPendencia = snapshotPendencia.data();
+
+        // Sem forma de pagamento (ou PIX/Débito sem banco), o app não sabe
+        // DE ONDE sair o dinheiro — o gasto até entra no mês, mas não desce
+        // o saldo do banco. Então pede isso antes de marcar como paga.
+        const precisaDeBanco = dadosPendencia.formaPagamento === "pix" || dadosPendencia.formaPagamento === "debito";
+        if (!dadosPendencia.formaPagamento || (precisaDeBanco && !dadosPendencia.banco)) {
+            mostrarToast("Antes, diga como vai pagar (PIX, Débito, Dinheiro...) pra eu saber de onde descontar.");
+            abrirModalEditarFormaPagamento(
+                idPendencia, dadosPendencia.grupoId || "", dadosPendencia.formaPagamento || "",
+                dadosPendencia.banco || "", dadosPendencia.descricao || ""
+            );
+            return;
+        }
+
+        const confirmouPagar = await confirmarComTelinha("Tem certeza de que esse pagamento já foi feito? Isso vai descontar o valor do seu saldo.");
+        if (!confirmouPagar) return;
 
         const [ano, mes] = dadosPendencia.mesReferencia.split("-").map(Number);
         const agoraDoPagamento = new Date();
