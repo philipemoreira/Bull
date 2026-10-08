@@ -43,33 +43,30 @@
             </button>
         </header>
 
-        <main class="conteudo-principal">
-            <a href="perfil.html" class="botao-encerrar-sessao">Editar Perfil</a>
+        <main class="conteudo-principal cfg-pagina">
+            <h2 class="cfg-grupo-titulo">Conta</h2>
+            <div class="cfg-grupo">
+                <a class="cfg-item" href="perfil.html"><span class="cfg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg></span><span class="cfg-texto"><span class="cfg-titulo">Editar perfil</span><span class="cfg-sub">Nome, profissão e salário</span></span><svg class="cfg-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></a>
+                <a class="cfg-item" href="conta.html"><span class="cfg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span><span class="cfg-texto"><span class="cfg-titulo">Trocar e-mail ou senha</span><span class="cfg-sub">Dados de acesso da sua conta</span></span><svg class="cfg-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></a>
+            </div>
 
-            <a href="conta.html" class="botao-encerrar-sessao" style="margin-top: 10px;">Trocar E-mail/Senha</a>
+            <h2 class="cfg-grupo-titulo">Finanças</h2>
+            <div class="cfg-grupo">
+                <button class="cfg-item" type="button" id="botao-abrir-trocar-principal"><span class="cfg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18"/></svg></span><span class="cfg-texto"><span class="cfg-titulo">Trocar banco principal</span><span class="cfg-sub">O saldo que aparece na tela inicial</span></span><svg class="cfg-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></button>
+                <a class="cfg-item" href="historico-faturas.html"><span class="cfg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg></span><span class="cfg-texto"><span class="cfg-titulo">Histórico de faturas pagas</span><span class="cfg-sub">Faturas do cartão e os itens de cada uma</span></span><svg class="cfg-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></a>
+            </div>
 
-            <button type="button" class="botao-encerrar-sessao" id="botao-abrir-trocar-principal" style="margin-top: 10px;">
-                Trocar Banco Principal
-            </button>
+            <h2 class="cfg-grupo-titulo">Segurança</h2>
+            <div class="cfg-grupo">
+                <button class="cfg-item" type="button" id="botao-alternar-biometria"><span class="cfg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11v3a4 4 0 0 1-1 2.6"/><path d="M8 12a4 4 0 0 1 8 0v2c0 2-.5 3.5-1.5 5"/><path d="M5 12a7 7 0 0 1 14 0v1"/><path d="M8 17c0 1-.2 2-.6 3"/></svg></span><span class="cfg-texto"><span class="cfg-titulo" id="rotulo-biometria">Ativar login com biometria</span><span class="cfg-sub" id="texto-status-biometria"></span></span><svg class="cfg-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></button>
+                <button class="cfg-item" type="button" id="botao-abrir-historico-acessos"><span class="cfg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="cfg-texto"><span class="cfg-titulo">Histórico de acessos</span><span class="cfg-sub">Quando o app foi aberto e em que aparelho</span></span><svg class="cfg-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></button>
+            </div>
 
-            <a href="historico-faturas.html" class="botao-encerrar-sessao" style="margin-top: 10px;">Histórico de Faturas Pagas</a>
-
-            <button type="button" class="botao-encerrar-sessao" id="botao-abrir-historico-acessos" style="margin-top: 10px;">
-                Histórico de Acessos
-            </button>
-
-            <button type="button" class="botao-encerrar-sessao" id="botao-alternar-biometria" style="margin-top: 10px;">
-                Ativar Login com Biometria
-            </button>
-            <p class="texto-explicativo-guardado" id="texto-status-biometria" style="margin: 8px 2px 0;"></p>
-
-            <button type="button" class="botao-encerrar-sessao" id="botao-sair" style="margin-top: 24px; border-color: var(--error); color: var(--error);">
-                Encerrar Sessão
-            </button>
-
-            <button type="button" class="botao-encerrar-sessao" id="botao-excluir-conta" style="margin-top: 10px; border-color: var(--error); color: var(--error);">
-                Excluir Conta
-            </button>
+            <h2 class="cfg-grupo-titulo cfg-perigo-titulo">Sessão</h2>
+            <div class="cfg-grupo">
+                <button type="button" class="cfg-item cfg-perigo" id="botao-sair"><span class="cfg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg></span><span class="cfg-texto"><span class="cfg-titulo">Encerrar sessão</span></span></button>
+                <button type="button" class="cfg-item cfg-perigo" id="botao-excluir-conta"><span class="cfg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg></span><span class="cfg-texto"><span class="cfg-titulo">Excluir conta</span><span class="cfg-sub">Você tem 7 dias para se arrepender</span></span></button>
+            </div>
         </main>
 
         <nav class="nav-inferior" id="nav-inferior">

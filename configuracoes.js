@@ -100,16 +100,16 @@ document.addEventListener("DOMContentLoaded", function () {
         const suportado = await suportaBiometria();
         if (!suportado) {
             botaoAlternarBiometria.disabled = true;
-            textoStatusBiometria.textContent = "Esse aparelho ou navegador não tem suporte a biometria (digital, rosto ou PIN do sistema).";
+            textoStatusBiometria.textContent = "Esse aparelho ou navegador não tem suporte a biometria.";
             return;
         }
 
         botaoAlternarBiometria.disabled = false;
         const ativa = biometriaAtiva(uidAtual);
-        botaoAlternarBiometria.textContent = ativa ? "Desativar Login com Biometria" : "Ativar Login com Biometria";
+        document.getElementById("rotulo-biometria").textContent = ativa ? "Desativar login com biometria" : "Ativar login com biometria";
         textoStatusBiometria.textContent = ativa
-            ? "Ativado neste aparelho. Ao reabrir o Bull aqui, ele vai pedir sua digital, rosto ou PIN antes de entrar."
-            : "Depois de ativado, o Bull pede sua digital, rosto ou PIN do aparelho toda vez que você reabrir o app por aqui, sem precisar digitar a senha de novo. Só funciona neste aparelho/navegador — em um aparelho novo, o login continua sendo o normal.";
+            ? "Ativado neste aparelho. Se falhar 3 vezes, vale a senha de 8 dígitos."
+            : "Entre no Bull só com digital ou rosto, sem digitar a senha de 8 dígitos. Vale só neste aparelho.";
     }
 
     botaoAlternarBiometria.addEventListener("click", async () => {
