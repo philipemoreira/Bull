@@ -863,7 +863,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (dados.tipo === "ganho" && !ehCategoriaEspecial && dados.banco === nomeBanco) {
                 total += dados.valor;
             }
-            if (dados.tipo === "gasto" && !ehCategoriaEspecial && (dados.formaPagamento === "pix" || dados.formaPagamento === "debito") && dados.banco === nomeBanco) {
+            if (dados.tipo === "gasto" && !ehCategoriaEspecial && dados.categoria !== "Fatura do Cartão" && (dados.formaPagamento === "pix" || dados.formaPagamento === "debito") && dados.banco === nomeBanco) {
                 total -= dados.valor;
             }
             // Pagamento de fatura do cartão — não é PIX nem Débito
