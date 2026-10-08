@@ -652,6 +652,7 @@ document.addEventListener("DOMContentLoaded", function () {
             itensAcumulandoAgora,
             totalFechadoNaoPago,
             totalFechadoPago,
+            totalAcumulandoAgora,
             mesReferenciaParaExibir,
             // "Você já gastou" = tudo fechado ainda não pago + só a fatura
             // que está formando agora (não os meses agendados lá na frente)
