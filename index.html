@@ -220,6 +220,26 @@
         </div>
     </div>
 
+    <!-- "Esqueci minha senha de 8 dígitos": confirma que é o dono da conta
+         (senha da conta ou Google) antes de deixar criar uma nova -->
+    <div class="tela-bloqueio-biometria" id="tela-confirmar-conta" hidden>
+        <div class="conteudo-bloqueio-biometria">
+            <span class="selo-marca-carregamento">Bull</span>
+            <h2 class="titulo-pin">Confirme que é você</h2>
+            <p class="texto-bloqueio-biometria" id="texto-confirmar-conta">Digite a senha da sua conta (a do login) pra criar uma nova senha de 8 dígitos.</p>
+            <div class="campo" id="campo-confirmar-conta-grupo" style="width:100%;text-align:left;">
+                <label for="campo-confirmar-conta">Senha da conta</label>
+                <input type="password" id="campo-confirmar-conta" autocomplete="current-password" placeholder="Senha da conta">
+            </div>
+            <div class="mensagem-aviso" id="mensagem-aviso-confirmar-conta" role="alert"></div>
+            <button type="button" class="botao-enviar" id="botao-confirmar-conta">
+                <span class="texto-botao" id="texto-botao-confirmar-conta">Confirmar</span>
+            </button>
+            <button type="button" class="link-botao-simples" id="botao-esqueci-senha-conta">Esqueci a senha da conta</button>
+            <button type="button" class="link-botao-simples" id="botao-voltar-confirmar-conta">Voltar</button>
+        </div>
+    </div>
+
     <!-- Aparece só quando a pessoa loga numa conta marcada pra exclusão, ainda
          dentro do prazo de 7 dias — dá a chance de reativar em vez de perder
          tudo. Ver a checagem em app.js, logo após o login. -->

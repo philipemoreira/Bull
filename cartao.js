@@ -174,19 +174,6 @@ document.addEventListener("DOMContentLoaded", function () {
         return hojeSoData >= dataDeFechamento(mesReferencia, diaFechamento);
     }
 
-    // Calcula em qual fatura (mês) uma compra feita HOJE deveria cair,
-    // dado o dia de fechamento do cartão escolhido: antes do fechamento,
-    // entra na fatura que ainda vai fechar esse mês; no dia do fechamento
-    // (inclusive) ou depois, já pula pra fatura do mês seguinte (igual ao Nubank:
-    // no dia do fechamento é o "melhor dia pra compras")
-    function calcularMesReferenciaFatura(hoje, diaFechamento) {
-        if (hoje.getDate() < diaFechamento) {
-            return mesReferenciaString(hoje);
-        }
-        const proximoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
-        return mesReferenciaString(proximoMes);
-    }
-
     function formatarMoeda(valor) {
         const valorCorrigido = valor === 0 ? 0 : valor;
         return valorCorrigido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -382,68 +369,6 @@ document.addEventListener("DOMContentLoaded", function () {
     function formatarMesReferencia(mesReferencia) {
         const [ano, mes] = mesReferencia.split("-");
         return `${NOMES_MESES[parseInt(mes, 10) - 1]}/${ano}`;
-    }
-
-    // Desenha a lista de itens agrupada por tipo (Fixos / Parcelados /
-    // Compras únicas), cada grupo ordenado cronologicamente por mês — sem
-    // isso, um item de um mês distante podia aparecer antes de um mais
-    // perto, dando a impressão errada de "pulo" no tempo
-    function renderizarListaDeItens(itens, containerAlvo, elementoVazio) {
-        containerAlvo.innerHTML = "";
-        if (elementoVazio) elementoVazio.hidden = itens.length > 0;
-
-        const itensOrdenados = [...itens].sort((a, b) => a.data().mesReferencia.localeCompare(b.data().mesReferencia));
-
-        const grupos = { fixo: [], parcelado: [], avulsa: [] };
-        itensOrdenados.forEach((documento) => {
-            const origem = documento.data().origem || "avulsa";
-            (grupos[origem] || grupos.avulsa).push(documento);
-        });
-
-        const nomesGrupos = { fixo: "Fixos", parcelado: "Parcelados", avulsa: "Compras únicas" };
-
-        Object.keys(nomesGrupos).forEach((chaveGrupo) => {
-            const itensDoGrupo = grupos[chaveGrupo];
-            if (itensDoGrupo.length === 0) return;
-
-            const secao = document.createElement("div");
-            secao.style.marginBottom = "18px";
-
-            const cabecalho = document.createElement("h4");
-            cabecalho.style.cssText = "font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin: 0 0 8px 4px;";
-            cabecalho.textContent = nomesGrupos[chaveGrupo];
-            secao.appendChild(cabecalho);
-
-            const lista = document.createElement("ul");
-            lista.className = "lista-contas";
-
-            itensDoGrupo.forEach((documento) => {
-                const dados = documento.data();
-                const badgeParcela = dados.origem === "parcelado"
-                    ? `<span class="badge-parcela">Parcela ${dados.numeroParcela}/${dados.totalParcelas}</span>`
-                    : "";
-                const badgeCartaoHtml = `<span class="badge-cartao">${nomeDoCartao(dados.cartaoId)}</span>`;
-
-                const item = document.createElement("li");
-                item.className = "item-conta";
-                item.innerHTML = `
-                    <div class="info-conta">
-                        <div class="nome-conta">${dados.descricao}${badgeParcela}${badgeCartaoHtml}</div>
-                        <div class="meta-conta">${dados.pago ? "Já paga" : `Fatura de ${formatarMesReferencia(dados.mesReferencia)}`}${listaDeCartoes.some((c) => c.id === dados.cartaoId) ? "" : " · não entra no total (cartão removido)"}</div>
-                    </div>
-                    <span class="valor-conta" style="color: ${dados.pago ? "var(--sucesso)" : "#F5D76E"};">${formatarMoeda(dados.valor)}</span>
-                    <button class="botao-excluir-conta" data-id="${documento.id}" aria-label="Excluir item">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/>
-                        </svg>
-                    </button>
-                `;
-                lista.appendChild(item);
-            });
-
-            secao.appendChild(lista);
-            containerAlvo.appendChild(secao);
-        });
     }
 
     // O mesmo comportamento de excluir vale pras duas listas — por isso o

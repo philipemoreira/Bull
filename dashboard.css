@@ -1819,3 +1819,51 @@ html.privacidade-ativa .botao-privacidade {
     font-weight: 700;
     cursor: pointer;
 }
+
+/* ---- Lápis de editar + chips de ação nas pendências ---- */
+.nome-conta .botao-lapis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    margin-left: 6px;
+    vertical-align: middle;
+    background: var(--surface-alta);
+    border: 1px solid var(--borda);
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    transition: color .15s, border-color .15s;
+}
+.nome-conta .botao-lapis:hover,
+.nome-conta .botao-lapis:active {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.chips-conta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+.chip-acao {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-alta);
+    border: 1px solid var(--borda);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-family: var(--fonte-corpo);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 11px;
+    cursor: pointer;
+}
+.chip-acao:hover,
+.chip-acao:active {
+    color: var(--text-primary);
+    border-color: var(--accent);
+}

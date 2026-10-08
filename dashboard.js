@@ -322,6 +322,10 @@ document.addEventListener("DOMContentLoaded", function () {
         escutarPendenciasDoMes();
         buscarGastosMesAnterior();
         escutarSaldoBancoPrincipal();
+        // As compras no cartão também entram no gráfico — começam a chegar
+        // já, sem esperar a fila de consultas secundárias lá embaixo (era
+        // isso que deixava o gráfico incompleto na abertura do app)
+        escutarResumoFaturaCartoes();
         setTimeout(() => {
             if (!bancoPrincipalResolvido) { bancoPrincipalResolvido = true; atualizarNumeroGrandeDoSaldo(); }
         }, 5000);
@@ -381,6 +385,8 @@ document.addEventListener("DOMContentLoaded", function () {
         await carregarComSeguranca("bancos", carregarBancos);
         await carregarComSeguranca("resumo de bancos", atualizarResumoBancos);
         await carregarComSeguranca("cartões", carregarCartoes);
+        // Agora que os cartões (dia de fechamento, nomes) estão carregados,
+        // recomeça a escuta pra recalcular o resumo da fatura e o gráfico
         escutarResumoFaturaCartoes();
         if (!perfil.migracaoMesReferenciaConcluida) {
             await carregarComSeguranca("migração de lançamentos antigos", migrarLancamentosAntigos);
@@ -2310,6 +2316,9 @@ document.addEventListener("DOMContentLoaded", function () {
     // Monta o <li> de uma pendência. mostrarBotaoPago=false esconde o botão
     // "Marcar como paga" — usado pros itens "No Cartão", que só são pagos
     // em bloco, através da Fatura
+    const ICONE_LAPIS = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
+    const ICONE_LAPIS_PEQUENO = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
+
     function criarItemPendencia(documento, mostrarBotaoPago) {
         const dados = documento.data();
         const parcelasRestantes = dados.origem === "parcelado" ? dados.totalParcelas - dados.numeroParcela : null;
@@ -2345,9 +2354,9 @@ document.addEventListener("DOMContentLoaded", function () {
             const nomesFormaPagamento = { dinheiro: "Dinheiro", pix: "PIX", debito: "Débito" };
             const textoAtual = dados.formaPagamento ? (nomesFormaPagamento[dados.formaPagamento] || dados.formaPagamento) : null;
             const textoBotaoForma = textoAtual
-                ? `Editar forma de pagamento (${textoAtual}${dados.banco ? " · " + dados.banco : ""})`
-                : "+ Adicionar forma de pagamento";
-            linhaFormaPagamentoHtml = `<div class="linha-acoes-pix" style="margin-top:6px;"><button type="button" class="link-botao-simples botao-editar-forma-pagamento" data-id="${documento.id}" data-grupo="${dados.grupoId || ""}" data-forma-atual="${dados.formaPagamento || ""}" data-banco-atual="${dados.banco || ""}" data-descricao="${descricaoEscapadaForma}">${textoBotaoForma}</button></div>`;
+                ? `${textoAtual}${dados.banco ? " · " + dados.banco : ""}`
+                : "+ Forma de pagamento";
+            linhaFormaPagamentoHtml = `<button type="button" class="chip-acao botao-editar-forma-pagamento" title="Editar forma de pagamento" data-id="${documento.id}" data-grupo="${dados.grupoId || ""}" data-forma-atual="${dados.formaPagamento || ""}" data-banco-atual="${dados.banco || ""}" data-descricao="${descricaoEscapadaForma}">${textoBotaoForma}${textoAtual ? ICONE_LAPIS_PEQUENO : ""}</button>`;
         }
 
         // Chave PIX: se a forma de pagamento for PIX, sempre oferece um
@@ -2362,13 +2371,14 @@ document.addEventListener("DOMContentLoaded", function () {
             const chaveEscapada = (dados.chavePix || "").replace(/"/g, "&quot;");
             const descricaoEscapada = (dados.descricao || "").replace(/"/g, "&quot;");
             const botaoCopiar = dados.chavePix
-                ? `<button type="button" class="link-botao-simples botao-copiar-pix" data-chave="${chaveEscapada}">Copiar PIX</button>`
+                ? `<button type="button" class="chip-acao botao-copiar-pix" data-chave="${chaveEscapada}">Copiar PIX</button>`
                 : "";
-            const botaoEditar = `<button type="button" class="link-botao-simples botao-editar-pix" data-id="${documento.id}" data-grupo="${dados.grupoId || ""}" data-chave-atual="${chaveEscapada}" data-descricao="${descricaoEscapada}">${dados.chavePix ? "Editar chave" : "+ Adicionar chave PIX"}</button>`;
-            linhaChavePixHtml = `<div class="linha-acoes-pix" style="display:flex; gap:14px; margin-top:6px;">${botaoCopiar}${botaoEditar}</div>`;
+            const botaoEditar = `<button type="button" class="chip-acao botao-editar-pix" data-id="${documento.id}" data-grupo="${dados.grupoId || ""}" data-chave-atual="${chaveEscapada}" data-descricao="${descricaoEscapada}">${dados.chavePix ? "Editar chave" : "+ Chave PIX"}</button>`;
+            linhaChavePixHtml = `${botaoCopiar}${botaoEditar}`;
         }
 
-        const botaoEditarPendenciaHtml = dados.noCartao ? "" : `<div class="linha-acoes-pix" style="margin-top:6px;"><button type="button" class="link-botao-simples botao-editar-pendencia" data-id="${documento.id}">Editar nome ou valor</button></div>`;
+        const botaoEditarPendenciaHtml = dados.noCartao ? "" : `<button type="button" class="botao-lapis botao-editar-pendencia" data-id="${documento.id}" aria-label="Editar nome ou valor" title="Editar nome ou valor">${ICONE_LAPIS}</button>`;
+        const temChips = linhaFormaPagamentoHtml || linhaChavePixHtml;
 
         const botaoPagoHtml = mostrarBotaoPago ? `
                 <button class="botao-marcar-pago ${dados.pago ? "pago" : ""}" data-id="${documento.id}" data-pago="${dados.pago}">
@@ -2381,13 +2391,11 @@ document.addEventListener("DOMContentLoaded", function () {
         item.innerHTML = `
             <span class="ponto-categoria ponto-categoria-conta"></span>
             <div class="info-conta">
-                <div class="nome-conta">${dados.descricao}${badgeParcela}${badgeQuaseAcabando}</div>
+                <div class="nome-conta">${dados.descricao}${badgeParcela}${badgeQuaseAcabando}${botaoEditarPendenciaHtml}</div>
                 <div class="meta-conta">${dados.categoria} · Vence dia ${dados.diaDoMes}</div>
                 ${textoValorTotal}
                 ${textoPagoEm}
-                ${botaoEditarPendenciaHtml}
-                ${linhaFormaPagamentoHtml}
-                ${linhaChavePixHtml}
+                ${temChips ? `<div class="chips-conta">${linhaFormaPagamentoHtml}${linhaChavePixHtml}</div>` : ""}
             </div>
             <span class="valor-conta">${formatarMoeda(dados.valor)}</span>
             <div class="status-conta">

@@ -7,7 +7,10 @@ import {
     sendPasswordResetEmail,
     GoogleAuthProvider,
     signInWithPopup,
-    deleteUser
+    deleteUser,
+    EmailAuthProvider,
+    reauthenticateWithCredential,
+    reauthenticateWithPopup
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
     doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField,
@@ -66,9 +69,20 @@ document.addEventListener("DOMContentLoaded", function () {
     const textoBotaoPin = document.getElementById("texto-botao-pin");
     const botaoEsqueciPin = document.getElementById("botao-esqueci-pin");
 
+    const telaConfirmarConta = document.getElementById("tela-confirmar-conta");
+    const textoConfirmarConta = document.getElementById("texto-confirmar-conta");
+    const grupoConfirmarConta = document.getElementById("campo-confirmar-conta-grupo");
+    const campoConfirmarConta = document.getElementById("campo-confirmar-conta");
+    const mensagemAvisoConfirmarConta = document.getElementById("mensagem-aviso-confirmar-conta");
+    const botaoConfirmarConta = document.getElementById("botao-confirmar-conta");
+    const textoBotaoConfirmarConta = document.getElementById("texto-botao-confirmar-conta");
+    const botaoEsqueciSenhaConta = document.getElementById("botao-esqueci-senha-conta");
+    const botaoVoltarConfirmarConta = document.getElementById("botao-voltar-confirmar-conta");
+
     // Quando a pessoa diz "esqueci minha senha de 8 dígitos": sai da conta,
     // entra de novo com e-mail/senha e aí cria uma nova de 8 dígitos
     let redefinirPinNoProximoLogin = false;
+    let saiuDaContaNaTelaPin = false;
 
     // Fica "true" assim que a pessoa faz login de propósito nessa mesma
     // abertura da página (digitou senha ou usou o Google) — nesse caso não
@@ -360,6 +374,7 @@ document.addEventListener("DOMContentLoaded", function () {
         telaBoasVindas.hidden = true;
         telaBloqueioBiometria.hidden = true;
         telaPin.hidden = true;
+        telaConfirmarConta.hidden = true;
     }
 
     function mostrarAvisoPin(texto) {
@@ -486,6 +501,85 @@ document.addEventListener("DOMContentLoaded", function () {
         setTimeout(() => campoPin.focus(), 50);
     }
 
+    // Prova que é o dono da conta (senha da conta, ou Google se entrou por
+    // lá). true = confirmou; false = voltou sem confirmar.
+    function confirmarDonoDaConta(usuario) {
+        return new Promise((resolver) => {
+            const temSenha = usuario.providerData.some((p) => p.providerId === "password");
+            grupoConfirmarConta.hidden = !temSenha;
+            botaoEsqueciSenhaConta.hidden = !temSenha;
+            textoConfirmarConta.textContent = temSenha
+                ? "Digite a senha da sua conta (a do login) pra criar uma nova senha de 8 dígitos."
+                : "Confirme sua conta do Google pra criar uma nova senha de 8 dígitos.";
+            textoBotaoConfirmarConta.textContent = temSenha ? "Confirmar" : "Confirmar com o Google";
+            campoConfirmarConta.value = "";
+            mensagemAvisoConfirmarConta.classList.remove("visivel");
+            telaConfirmarConta.hidden = false;
+            if (temSenha) setTimeout(() => campoConfirmarConta.focus(), 50);
+
+            function avisar(texto) {
+                mensagemAvisoConfirmarConta.textContent = texto;
+                mensagemAvisoConfirmarConta.classList.toggle("visivel", Boolean(texto));
+            }
+            function terminar(resultado) {
+                botaoConfirmarConta.removeEventListener("click", confirmar);
+                botaoEsqueciSenhaConta.removeEventListener("click", esqueciSenhaConta);
+                botaoVoltarConfirmarConta.removeEventListener("click", voltar);
+                campoConfirmarConta.removeEventListener("keydown", aoTeclar);
+                telaConfirmarConta.hidden = true;
+                resolver(resultado);
+            }
+            function voltar() { terminar(false); }
+            function aoTeclar(evento) { if (evento.key === "Enter") confirmar(); }
+
+            async function confirmar() {
+                if (botaoConfirmarConta.disabled) return;
+                if (temSenha && !campoConfirmarConta.value) { avisar("Digita a senha da conta."); return; }
+                botaoConfirmarConta.disabled = true;
+                avisar("");
+                try {
+                    if (temSenha) {
+                        await reauthenticateWithCredential(usuario, EmailAuthProvider.credential(usuario.email, campoConfirmarConta.value));
+                    } else {
+                        await reauthenticateWithPopup(usuario, new GoogleAuthProvider());
+                    }
+                    terminar(true);
+                } catch (erro) {
+                    const codigo = erro && erro.code;
+                    if (codigo === "auth/too-many-requests") {
+                        avisar("Muitas tentativas. Espera um pouco ou use \"Esqueci a senha da conta\".");
+                    } else if (codigo === "auth/network-request-failed") {
+                        avisar("Sem internet. Confere a conexão e tenta de novo.");
+                    } else if (codigo === "auth/popup-closed-by-user" || codigo === "auth/cancelled-popup-request") {
+                        avisar("Confirmação cancelada.");
+                    } else {
+                        avisar(temSenha ? "Senha da conta errada." : "Não deu pra confirmar com o Google.");
+                    }
+                    campoConfirmarConta.value = "";
+                } finally {
+                    botaoConfirmarConta.disabled = false;
+                }
+            }
+
+            async function esqueciSenhaConta() {
+                botaoEsqueciSenhaConta.disabled = true;
+                try {
+                    await sendPasswordResetEmail(auth, usuario.email);
+                    avisar(`Mandamos um e-mail pra ${usuario.email} com o link pra trocar a senha da conta. Depois volta aqui e confirma com a senha nova.`);
+                } catch (erro) {
+                    avisar("Não deu pra enviar o e-mail agora. Tenta de novo daqui a pouco.");
+                } finally {
+                    botaoEsqueciSenhaConta.disabled = false;
+                }
+            }
+
+            botaoConfirmarConta.addEventListener("click", confirmar);
+            botaoEsqueciSenhaConta.addEventListener("click", esqueciSenhaConta);
+            botaoVoltarConfirmarConta.addEventListener("click", voltar);
+            campoConfirmarConta.addEventListener("keydown", aoTeclar);
+        });
+    }
+
     // Digitar a senha de 8 dígitos. true = entrou; false = saiu da conta.
     function pedirPin(usuario, registroPin) {
         return new Promise((resolver) => {
@@ -529,10 +623,27 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (campoPin.value.length === 8) conferir();
             }
 
-            function aoEsquecer() {
-                redefinirPinNoProximoLogin = true;
-                terminar(false);
-                sairDaContaEMostrarLogin("Entre com e-mail e senha da conta. Depois você cria uma nova senha de 8 dígitos.");
+            // "Esqueci": confirma que é o dono da conta e cria uma senha nova,
+            // sem desconectar. Se desistir, volta pra tela da senha.
+            async function aoEsquecer() {
+                campoPin.removeEventListener("input", aoDigitar);
+                botaoConfirmarPin.removeEventListener("click", conferir);
+                botaoEsqueciPin.removeEventListener("click", aoEsquecer);
+                telaPin.hidden = true;
+
+                saiuDaContaNaTelaPin = false;
+                const confirmou = await confirmarDonoDaConta(usuario);
+                if (confirmou && await pedirCriarPin(usuario)) {
+                    resolver(true);
+                    return;
+                }
+                if (saiuDaContaNaTelaPin) { resolver(false); return; }
+
+                // Desistiu: volta pra digitar a senha
+                prepararTelaPin("verificar");
+                campoPin.addEventListener("input", aoDigitar);
+                botaoConfirmarPin.addEventListener("click", conferir);
+                botaoEsqueciPin.addEventListener("click", aoEsquecer);
             }
 
             campoPin.addEventListener("input", aoDigitar);
@@ -575,6 +686,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             function aoSair() {
+                saiuDaContaNaTelaPin = true;
                 terminar(false);
                 sairDaContaEMostrarLogin("");
             }
