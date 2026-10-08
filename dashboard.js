@@ -487,6 +487,23 @@ document.addEventListener("DOMContentLoaded", function () {
         buscarGastosMesAnterior();
     }
 
+    // Volta do segundo plano (celular) ou da internet caindo: refaz as
+    // escutas principais — o app aberto há muito tempo pode ficar com dados
+    // velhos ou incompletos até a pessoa trocar de mês
+    let ultimaVezEscondido = 0;
+    function recarregarEscutasPrincipais() {
+        if (!uidAtual) return;
+        escutarLancamentosDoMes();
+        escutarPendenciasDoMes();
+        buscarGastosMesAnterior();
+        escutarResumoFaturaCartoes();
+    }
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) { ultimaVezEscondido = Date.now(); return; }
+        if (ultimaVezEscondido && Date.now() - ultimaVezEscondido > 15000) recarregarEscutasPrincipais();
+    });
+    window.addEventListener("online", recarregarEscutasPrincipais);
+
     function atualizarRotuloMes() {
         rotuloMes.textContent = `${NOMES_MESES[mesSelecionado.getMonth()]} ${mesSelecionado.getFullYear()}`;
 
@@ -888,8 +905,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 pararDeEscutarSaldoBancoPrincipal = null;
             }
 
-            bancoPrincipalResolvido = true;
             if (snapshotBancos.empty) {
+                bancoPrincipalResolvido = true;
                 saldoBancoPrincipalAtual = null;
                 nomeBancoPrincipalAtual = null;
                 atualizarNumeroGrandeDoSaldo();
@@ -900,7 +917,12 @@ document.addEventListener("DOMContentLoaded", function () {
             nomeBancoPrincipalAtual = bancoPrincipal.nome;
 
             const referenciaLancamentos = collection(db, "usuarios", uidAtual, "lancamentos");
-            pararDeEscutarSaldoBancoPrincipal = onSnapshot(referenciaLancamentos, (snapshotLancamentos) => {
+            // Um snapshot "do cache" pode vir incompleto na abertura do app
+            // (mostraria um saldo errado por alguns segundos). Espera o do
+            // servidor; se ele não vier em 4s (sem internet), usa o do cache.
+            let chegouDoServidor = false;
+            let temporizadorCache = null;
+            pararDeEscutarSaldoBancoPrincipal = onSnapshot(referenciaLancamentos, { includeMetadataChanges: true }, (snapshotLancamentos) => {
                 let total = bancoPrincipal.saldoInicial || 0;
 
                 snapshotLancamentos.forEach((documento) => {
@@ -924,8 +946,18 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
                 });
 
-                saldoBancoPrincipalAtual = total;
-                atualizarNumeroGrandeDoSaldo();
+                const aplicar = () => {
+                    saldoBancoPrincipalAtual = total;
+                    bancoPrincipalResolvido = true;
+                    atualizarNumeroGrandeDoSaldo();
+                };
+                clearTimeout(temporizadorCache);
+                if (snapshotLancamentos.metadata.fromCache && !chegouDoServidor) {
+                    temporizadorCache = setTimeout(aplicar, 4000);
+                } else {
+                    chegouDoServidor = true;
+                    aplicar();
+                }
             });
         }, (erro) => {
             console.error("Bull: erro ao escutar o banco principal —", erro);
@@ -2988,7 +3020,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // ==========================================================================
     // 10. ESCUTAR OS LANÇAMENTOS DO MÊS SELECIONADO, EM TEMPO REAL
     // ==========================================================================
-    function escutarLancamentosDoMes() {
+    function escutarLancamentosDoMes(tentativa = 0) {
         if (pararDeEscutar) pararDeEscutar();
 
         const mesReferenciaAtual = mesReferenciaString(mesSelecionado);
@@ -3001,7 +3033,7 @@ document.addEventListener("DOMContentLoaded", function () {
         // campos diferentes) — ordena do lado do app mesmo, é rapidinho.
         const consulta = query(referencia, where("mesReferencia", "==", mesReferenciaAtual));
 
-        pararDeEscutar = onSnapshot(consulta, (snapshot) => {
+        pararDeEscutar = onSnapshot(consulta, { includeMetadataChanges: true }, (snapshot) => {
             // Ordena pela ORDEM REAL que a pessoa lançou (criadoEm), não pela
             // data escolhida — assim "Lançamentos recentes" mostra de verdade
             // os últimos 4 que você acabou de criar, consistente com o extrato
@@ -3019,7 +3051,9 @@ document.addEventListener("DOMContentLoaded", function () {
             renderizarLista(documentosOrdenados);
             calcularTotais(documentosOrdenados);
             renderizarGrafico(documentosOrdenados);
-            primeiroSnapshotDoMesChegou = true;
+            // Só conta como "chegou" quando veio do servidor — o do cache
+            // pode estar incompleto na abertura do app
+            if (!snapshot.metadata.fromCache) primeiroSnapshotDoMesChegou = true;
         }, (erro) => {
             console.error("Bull: erro ao escutar os lançamentos do mês —", erro);
         });
@@ -3029,10 +3063,10 @@ document.addEventListener("DOMContentLoaded", function () {
         primeiroSnapshotDoMesChegou = false;
         const mesDaEscuta = mesReferenciaAtual;
         setTimeout(() => {
-            if (!primeiroSnapshotDoMesChegou && mesDaEscuta === mesReferenciaString(mesSelecionado)) {
-                escutarLancamentosDoMes();
+            if (!primeiroSnapshotDoMesChegou && tentativa < 3 && mesDaEscuta === mesReferenciaString(mesSelecionado)) {
+                escutarLancamentosDoMes(tentativa + 1);
             }
-        }, 6000);
+        }, 4000);
     }
 
     // ==========================================================================

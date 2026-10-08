@@ -8,7 +8,7 @@
 // instalar nada (nada de "npm install"), o navegador baixa isso sozinho.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // Essas são as "chaves de identidade" do SEU projeto Firebase — foram geradas
 // automaticamente quando você registrou o app no console (não são segredo
@@ -31,7 +31,11 @@ const app = initializeApp(firebaseConfig);
 // - db: é a porta de entrada para o banco de dados (Firestore), onde os
 //   lançamentos financeiros vão ser salvos nas próximas telas
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// "AutoDetectLongPolling": em celulares/PWA (principalmente iPhone) a conexão
+// em tempo real do Firestore às vezes fica presa e os dados não chegam até a
+// pessoa trocar de tela. Com isso ligado, o Firebase percebe e troca sozinho
+// pro modo alternativo, que é mais compatível.
+export const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 
 // Garante, de forma explícita, que o login fica salvo no aparelho entre uma
 // abertura e outra do app (em vez de depender do comportamento padrão
