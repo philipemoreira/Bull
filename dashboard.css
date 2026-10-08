@@ -1867,3 +1867,13 @@ html.privacidade-ativa .botao-privacidade {
     color: var(--text-primary);
     border-color: var(--accent);
 }
+
+/* Fatura já paga: linha discreta, sem caixa grande */
+.cc-pagar.cc-pagar-compacta {
+    padding: 10px 14px;
+    align-items: center;
+}
+.cc-pagar-compacta .cc-pagar-rotulo {
+    font-size: 13px;
+    margin: 0;
+}

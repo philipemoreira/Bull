@@ -525,6 +525,20 @@ document.addEventListener("DOMContentLoaded", function () {
             formaPagamento: formaEscolhida,
             banco: bancoEscolhido,
             quantidadeItens: itensNaoPagos.length,
+            lancamentoId: novoLancamento.id,
+            // Foto dos itens na hora do pagamento — assim o histórico mostra
+            // o que foi pago mesmo se um item for apagado ou a fatura desmarcada
+            itens: itensNaoPagos.map((documento) => {
+                const d = documento.data();
+                return {
+                    descricao: d.descricao || "",
+                    valor: d.valor || 0,
+                    origem: d.origem || "avulsa",
+                    numeroParcela: d.numeroParcela ?? null,
+                    totalParcelas: d.totalParcelas ?? null,
+                    mesReferencia: d.mesReferencia || null
+                };
+            }),
             dataPagamento: Timestamp.fromDate(agora),
             criadoEm: serverTimestamp()
         });
@@ -562,6 +576,15 @@ document.addEventListener("DOMContentLoaded", function () {
         const itensFechadosPagos = itensFechados.filter((documento) => documento.data().pago);
         const totalFechadoNaoPago = itensFechadosNaoPagos.reduce((soma, documento) => soma + documento.data().valor, 0);
         const totalFechadoPago = itensFechadosPagos.reduce((soma, documento) => soma + documento.data().valor, 0);
+        // Só a fatura paga MAIS RECENTE interessa pra tela (o resto já virou
+        // histórico) — e é só ela que o "Desmarcar" mexe, nunca as antigas
+        let mesUltimaFaturaPaga = null;
+        itensFechadosPagos.forEach((documento) => {
+            const mesRef = documento.data().mesReferencia;
+            if (!mesUltimaFaturaPaga || mesRef > mesUltimaFaturaPaga) mesUltimaFaturaPaga = mesRef;
+        });
+        const itensUltimaFaturaPaga = itensFechadosPagos.filter((documento) => documento.data().mesReferencia === mesUltimaFaturaPaga);
+        const totalUltimaFaturaPaga = itensUltimaFaturaPaga.reduce((soma, documento) => soma + documento.data().valor, 0);
         const totalAcumulandoAgora = itensAcumulandoAgora.reduce((soma, documento) => soma + documento.data().valor, 0);
 
         // Pra saber a data de fechamento/vencimento a mostrar: se tem
@@ -574,6 +597,9 @@ document.addEventListener("DOMContentLoaded", function () {
         return {
             itensFechadosNaoPagos,
             itensFechadosPagos,
+            itensUltimaFaturaPaga,
+            mesUltimaFaturaPaga,
+            totalUltimaFaturaPaga,
             itensAcumulandoAgora,
             totalFechadoNaoPago,
             totalFechadoPago,
@@ -612,12 +638,15 @@ document.addEventListener("DOMContentLoaded", function () {
                         <button type="button" class="cc-pagar-botao" data-acao="marcar" data-cartao="${cartao.id}">Marcar como pago</button>
                     </div>
                 `;
-            } else if (estado.itensFechadosPagos.length > 0) {
+            } else if (estado.itensUltimaFaturaPaga.length > 0) {
+                // Fatura já paga: nada de lista de itens — fica só uma linha
+                // discreta (com "Desmarcar" pra desfazer sem querer) e os
+                // detalhes ficam no Histórico de Faturas Pagas
+                const mesPago = NOMES_MESES[parseInt(estado.mesUltimaFaturaPaga.split("-")[1], 10) - 1].toLowerCase();
                 blocoPagarHtml = `
-                    <div class="cc-pagar paga">
+                    <div class="cc-pagar paga cc-pagar-compacta">
                         <div class="cc-pagar-info">
-                            <span class="cc-pagar-rotulo">✓ Fatura fechada · paga</span>
-                            <span class="cc-pagar-valor">${formatarMoeda(estado.totalFechadoPago)}</span>
+                            <span class="cc-pagar-rotulo">✓ Fatura de ${mesPago} paga · ${formatarMoeda(estado.totalUltimaFaturaPaga)}</span>
                         </div>
                         <button type="button" class="link-botao-simples" data-acao="desmarcar" data-cartao="${cartao.id}">Desmarcar</button>
                     </div>
@@ -669,7 +698,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 `;
             };
 
-            const itensFaturaAtual = [...estado.itensFechadosNaoPagos, ...estado.itensFechadosPagos];
+            const itensFaturaAtual = estado.itensFechadosNaoPagos;
             const blocoFaturaAtualHtml = montarBlocoItens(
                 itensFaturaAtual, "toggle-fatura-atual", cartoesComFaturaAtualAberta.has(cartao.id), "Fatura atual"
             );
@@ -769,7 +798,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         if (acao === "desmarcar") {
-            const itensPagos = estado.itensFechadosPagos;
+            const itensPagos = estado.itensUltimaFaturaPaga;
             if (itensPagos.length === 0) return;
 
             const confirmou = await confirmarComTelinha(
