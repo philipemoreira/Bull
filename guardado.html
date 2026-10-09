@@ -47,6 +47,8 @@
                 <span class="rotulo-cartao">Total guardado</span>
                 <span class="valor-saldo-grande" id="total-guardado">R$ 0,00</span>
                 <button type="button" class="botao-retirar" id="botao-abrir-retirada">Retirar Dinheiro</button>
+                <button type="button" class="link-editar-meta" id="botao-abrir-ajuste" style="display:block; margin: 12px auto 0;">Ajustar valor guardado</button>
+                <button type="button" class="link-editar-meta" id="botao-banco-cofrinho" style="display:block; margin: 8px auto 0;">Ligar o guardado ao saldo de um banco</button>
             </section>
 
             <p class="texto-explicativo-guardado">
@@ -99,6 +101,56 @@
                 <span>Mais</span>
             </a>
         </nav>
+    </div>
+
+    <div class="fundo-modal" id="fundo-modal-cofrinho">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Banco do guardado</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-cofrinho" aria-label="Fechar">✕</button>
+            </div>
+            <p class="texto-explicativo-guardado">Escolha o banco que é <strong>só para guardar</strong>. O total guardado passa a ser o saldo dele: se você gastar de lá, o guardado diminui sozinho; se entrar dinheiro, aumenta.</p>
+            <div class="campo">
+                <label for="campo-banco-cofrinho">Banco</label>
+                <select id="campo-banco-cofrinho"></select>
+            </div>
+            <div class="mensagem-aviso" id="mensagem-aviso-cofrinho" role="alert"></div>
+            <button type="button" class="botao-enviar" id="botao-salvar-cofrinho">
+                <span class="texto-botao">Salvar</span>
+                <span class="spinner-botao" hidden></span>
+            </button>
+        </div>
+    </div>
+
+    <div class="fundo-modal" id="fundo-modal-ajuste">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Ajustar valor guardado</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-ajuste" aria-label="Fechar">✕</button>
+            </div>
+            <p class="texto-explicativo-guardado" id="texto-atual-ajuste"></p>
+            <div class="campo">
+                <label for="campo-valor-ajuste">Quanto você tem guardado de verdade</label>
+                <div class="valor-wrapper">
+                    <span class="prefixo-valor">R$</span>
+                    <input type="text" inputmode="decimal" id="campo-valor-ajuste" placeholder="0,00">
+                </div>
+            </div>
+            <div class="campo" id="campo-meta-ajuste-wrapper" hidden>
+                <label for="campo-meta-ajuste">Tirar de qual meta</label>
+                <select id="campo-meta-ajuste"></select>
+            </div>
+            <div class="campo" id="campo-banco-ajuste-wrapper" hidden>
+                <label for="campo-banco-ajuste">Tirar de qual banco</label>
+                <select id="campo-banco-ajuste"></select>
+            </div>
+            <p class="texto-explicativo-guardado">Use quando o dinheiro já foi gasto sem registrar a retirada. O app só diminui o guardado — o seu saldo do banco não muda.</p>
+            <div class="mensagem-aviso" id="mensagem-aviso-ajuste" role="alert"></div>
+            <button type="button" class="botao-enviar" id="botao-confirmar-ajuste">
+                <span class="texto-botao">Ajustar</span>
+                <span class="spinner-botao" hidden></span>
+            </button>
+        </div>
     </div>
 
     <div class="fundo-modal" id="fundo-modal-retirada">

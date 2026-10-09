@@ -1,3 +1,4 @@
+import { aplicarMascaraValor } from "./util.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -17,29 +18,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let uidAtual = null;
 
-    // Aplica a máscara "tipo caixa eletrônico": os dígitos digitados
-    // entram sempre da direita pra esquerda (representando centavos), sem
-    // precisar digitar vírgula
-    function aplicarMascaraValor(input) {
-        function reformatar() {
-            const digitos = input.value.replace(/\D/g, "");
-            if (digitos === "") {
-                input.value = "";
-                return;
-            }
-            const centavos = parseInt(digitos, 10);
-            const reais = Math.floor(centavos / 100);
-            const centavosRestantes = centavos % 100;
-            input.value = `${reais},${String(centavosRestantes).padStart(2, "0")}`;
-        }
-        input.addEventListener("input", () => {
-            reformatar();
-            input.setSelectionRange(input.value.length, input.value.length);
-        });
-        input.addEventListener("focus", () => {
-            setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
-        });
-    }
     aplicarMascaraValor(campoSalario);
 
     // Limita a seleção a no máximo 2 profissões marcadas ao mesmo tempo

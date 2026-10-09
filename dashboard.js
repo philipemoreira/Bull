@@ -1,3 +1,6 @@
+import { calcularSaldoBanco } from "./saldoBanco.js";
+import { formatarMoeda, paraNumero, aplicarMascaraValor, mesReferenciaString, dataDeFechamento, faturaJaFechou } from "./util.js";
+import { escaparHtml } from "./texto.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -778,27 +781,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const referenciaLancamentos = collection(db, "usuarios", uidAtual, "lancamentos");
         const snapshotLancamentos = await getDocs(referenciaLancamentos);
 
-        let total = saldoInicial || 0;
-        snapshotLancamentos.forEach((documento) => {
-            const dados = documento.data();
-            const ehCategoriaEspecial = dados.categoria === "Guardar Dinheiro" || dados.categoria === "Retirada da Reserva";
-
-            if (dados.tipo === "ganho" && !ehCategoriaEspecial && dados.banco === nomeBanco) {
-                total += dados.valor;
-            }
-            if (dados.tipo === "gasto" && !ehCategoriaEspecial && dados.categoria !== "Fatura do Cartão" && (dados.formaPagamento === "pix" || dados.formaPagamento === "debito") && dados.banco === nomeBanco) {
-                total -= dados.valor;
-            }
-            if (dados.categoria === "Fatura do Cartão" && dados.banco === nomeBanco) {
-                total -= dados.valor;
-            }
-            if (ehCategoriaEspecial && dados.banco === nomeBanco) {
-                total += dados.valor;
-            }
-            if (dados.categoria === "Guardar Dinheiro" && dados.valor > 0 && dados.bancoOrigem === nomeBanco) {
-                total -= dados.valor;
-            }
-        });
+        const total = calcularSaldoBanco(nomeBanco, saldoInicial, snapshotLancamentos);
         return total;
     }
 
@@ -820,28 +803,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const bancosComSaldo = [];
         snapshotBancos.forEach((bancoDoc) => {
             const banco = bancoDoc.data();
-            let saldoBanco = banco.saldoInicial || 0;
-
-            snapshotLancamentos.forEach((lancDoc) => {
-                const dados = lancDoc.data();
-                const ehCategoriaEspecial = dados.categoria === "Guardar Dinheiro" || dados.categoria === "Retirada da Reserva";
-
-                if (dados.tipo === "ganho" && !ehCategoriaEspecial && dados.banco === banco.nome) {
-                    saldoBanco += dados.valor;
-                }
-                if (dados.tipo === "gasto" && !ehCategoriaEspecial && dados.categoria !== "Fatura do Cartão" && (dados.formaPagamento === "pix" || dados.formaPagamento === "debito") && dados.banco === banco.nome) {
-                    saldoBanco -= dados.valor;
-                }
-                if (dados.categoria === "Fatura do Cartão" && dados.banco === banco.nome) {
-                    saldoBanco -= dados.valor;
-                }
-                if (ehCategoriaEspecial && dados.banco === banco.nome) {
-                    saldoBanco += dados.valor;
-                }
-                if (dados.categoria === "Guardar Dinheiro" && dados.valor > 0 && dados.bancoOrigem === banco.nome) {
-                    saldoBanco -= dados.valor;
-                }
-            });
+            const saldoBanco = calcularSaldoBanco(banco.nome, banco.saldoInicial, snapshotLancamentos);
 
             totalGeral += saldoBanco;
             bancosComSaldo.push({ nome: banco.nome, saldo: saldoBanco });
@@ -857,7 +819,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     card.href = "cartao.html";
                     card.className = "cartao-banco-preview";
                     card.innerHTML = `
-                        <span class="nome-banco-preview">${banco.nome}</span>
+                        <span class="nome-banco-preview">${escaparHtml(banco.nome)}</span>
                         <span class="saldo-banco-preview">${formatarMoeda(banco.saldo)}</span>
                     `;
                     listaBancosCards.appendChild(card);
@@ -907,28 +869,7 @@ document.addEventListener("DOMContentLoaded", function () {
             let chegouDoServidor = false;
             let temporizadorCache = null;
             pararDeEscutarSaldoBancoPrincipal = onSnapshot(referenciaLancamentos, { includeMetadataChanges: true }, (snapshotLancamentos) => {
-                let total = bancoPrincipal.saldoInicial || 0;
-
-                snapshotLancamentos.forEach((documento) => {
-                    const dados = documento.data();
-                    const ehCategoriaEspecial = dados.categoria === "Guardar Dinheiro" || dados.categoria === "Retirada da Reserva";
-
-                    if (dados.tipo === "ganho" && !ehCategoriaEspecial && dados.banco === bancoPrincipal.nome) {
-                        total += dados.valor;
-                    }
-                    if (dados.tipo === "gasto" && !ehCategoriaEspecial && dados.categoria !== "Fatura do Cartão" && (dados.formaPagamento === "pix" || dados.formaPagamento === "debito") && dados.banco === bancoPrincipal.nome) {
-                        total -= dados.valor;
-                    }
-                    if (dados.categoria === "Fatura do Cartão" && dados.banco === bancoPrincipal.nome) {
-                        total -= dados.valor;
-                    }
-                    if (ehCategoriaEspecial && dados.banco === bancoPrincipal.nome) {
-                        total += dados.valor;
-                    }
-                    if (dados.categoria === "Guardar Dinheiro" && dados.valor > 0 && dados.bancoOrigem === bancoPrincipal.nome) {
-                        total -= dados.valor;
-                    }
-                });
+                const total = calcularSaldoBanco(bancoPrincipal.nome, bancoPrincipal.saldoInicial, snapshotLancamentos);
 
                 const aplicar = () => {
                     saldoBancoPrincipalAtual = total;
@@ -1172,7 +1113,91 @@ document.addEventListener("DOMContentLoaded", function () {
             textoAvisoVencimento.hidden = false;
         }
 
+        // Opções de "mesclar com": todas as outras categorias do mesmo tipo
+        const campoMesclar = document.getElementById("campo-mesclar-categoria");
+        const outras = [...new Set([
+            ...CATEGORIAS_PADRAO[tipoSelecionado],
+            ...categoriasCustomizadas[tipoSelecionado].map((c) => c.nome)
+        ])].filter((nome) => nome !== categoriaEmEdicaoNomeAntigo)
+            .sort((a, b) => a.localeCompare(b, "pt-BR"));
+        campoMesclar.innerHTML = "";
+        const escolha = document.createElement("option");
+        escolha.value = "";
+        escolha.textContent = "Escolher categoria que vai ficar...";
+        campoMesclar.appendChild(escolha);
+        outras.forEach((nome) => {
+            const opcao = document.createElement("option");
+            opcao.value = nome;
+            opcao.textContent = nome;
+            campoMesclar.appendChild(opcao);
+        });
+        document.getElementById("campo-mesclar-categoria-wrapper").hidden = outras.length === 0;
+
         fundoModalEditarCategoria.classList.add("aberto");
+    });
+
+    // Mescla a categoria em edição (que some) na escolhida (que fica)
+    document.getElementById("botao-mesclar-categoria").addEventListener("click", async () => {
+        const destino = document.getElementById("campo-mesclar-categoria").value;
+        const origem = categoriaEmEdicaoNomeAntigo;
+        const idOrigem = categoriaEmEdicaoId;
+        const tipoMescla = tipoSelecionado;
+        mensagemAvisoEditarCategoria.classList.remove("visivel");
+        if (!destino) {
+            mensagemAvisoEditarCategoria.textContent = "Escolhe a categoria que vai ficar.";
+            mensagemAvisoEditarCategoria.classList.add("visivel");
+            return;
+        }
+
+        const botaoMesclar = document.getElementById("botao-mesclar-categoria");
+        const spinnerMesclar = botaoMesclar.querySelector(".spinner-botao");
+        botaoMesclar.disabled = true;
+        try {
+            const lancamentos = await getDocs(query(collection(db, "usuarios", uidAtual, "lancamentos"), where("categoria", "==", origem)));
+            const pendencias = await getDocs(query(collection(db, "usuarios", uidAtual, "pendencias"), where("categoria", "==", origem)));
+            const total = lancamentos.size + pendencias.size;
+
+            fecharModalEditarCategoria();
+            const confirmou = await confirmarComTelinha(
+                `Vou passar ${total} ${total === 1 ? "item" : "itens"} de "${origem}" para "${destino}" e apagar a categoria "${origem}". Não dá para desfazer. Confirma?`,
+                "Mesclar categorias"
+            );
+            if (!confirmou) return;
+
+            spinnerMesclar.hidden = false;
+            const alvos = [...lancamentos.docs, ...pendencias.docs];
+            for (let i = 0; i < alvos.length; i += 400) {
+                const lote = writeBatch(db);
+                alvos.slice(i, i + 400).forEach((d) => lote.update(d.ref, { categoria: destino }));
+                await lote.commit();
+            }
+
+            // Limite mensal: se as duas tinham, soma; se só a que sumiu tinha, passa pra que fica
+            if (tipoMescla === "gasto") {
+                const limiteOrigem = mapaOrcamentos[origem] || 0;
+                const limiteDestino = mapaOrcamentos[destino] || 0;
+                if (limiteOrigem > 0) {
+                    const soma = Math.round((limiteOrigem + limiteDestino) * 100) / 100;
+                    await setDoc(doc(db, "usuarios", uidAtual, "orcamentos", destino), { categoria: destino, limite: soma });
+                    mapaOrcamentos[destino] = soma;
+                }
+                await deleteDoc(doc(db, "usuarios", uidAtual, "orcamentos", origem)).catch(() => {});
+                delete mapaOrcamentos[origem];
+            }
+
+            await deleteDoc(doc(db, "usuarios", uidAtual, "categorias", idOrigem));
+            categoriasCustomizadas[tipoMescla] = categoriasCustomizadas[tipoMescla].filter((c) => c.id !== idOrigem);
+            popularSelectCategorias();
+            campoCategoria.value = destino;
+            atualizarBotaoExcluirCategoria();
+            mostrarToast(`"${origem}" mesclada em "${destino}" ✓`);
+        } catch (erro) {
+            console.error(erro);
+            mostrarToast("Não deu pra mesclar agora. Tenta de novo.");
+        } finally {
+            botaoMesclar.disabled = false;
+            spinnerMesclar.hidden = true;
+        }
     });
 
     function fecharModalEditarCategoria() {
@@ -1559,11 +1584,6 @@ document.addEventListener("DOMContentLoaded", function () {
         return `${ano}-${mes}-${dia}`;
     }
 
-    // Formata pro padrão "AAAA-MM" — usado no campo "mesReferencia", que
-    // decide EM QUAL MÊS um lançamento conta (separado da data exibida nele)
-    function mesReferenciaString(data) {
-        return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}`;
-    }
 
     // Calcula em qual fatura (mês) uma compra feita HOJE deveria cair,
     // dado o dia de fechamento do cartão escolhido: antes do fechamento,
@@ -1578,24 +1598,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return mesReferenciaString(proximoMes);
     }
 
-    // As duas funções abaixo são cópias das mesmas de cartao.js — o
-    // resumo "Fatura Cartões de Crédito" da tela inicial PRECISA concordar
-    // com o que a tela do Cartão mostra, então usa exatamente a mesma
-    // lógica de fechamento (nada de comparar "mesReferencia" com o mês
-    // sendo navegado no calendário, que são conceitos diferentes — ver
-    // comentário em escutarResumoFaturaCartoes mais abaixo)
-    function dataDeFechamento(mesReferenciaFatura, diaFechamento) {
-        const [ano, mes] = mesReferenciaFatura.split("-").map(Number);
-        const ultimoDiaDoMes = new Date(ano, mes, 0).getDate();
-        const diaFinal = Math.min(diaFechamento, ultimoDiaDoMes);
-        return new Date(ano, mes - 1, diaFinal);
-    }
 
-    function faturaJaFechou(mesReferenciaFatura, diaFechamento) {
-        const hoje = new Date();
-        const hojeSoData = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-        return hojeSoData >= dataDeFechamento(mesReferenciaFatura, diaFechamento);
-    }
 
     atalhoHoje.addEventListener("click", () => {
         campoData.value = formatarDataParaCampo(new Date());
@@ -2366,13 +2369,13 @@ document.addEventListener("DOMContentLoaded", function () {
         // itens do cartão (crédito já tem seu próprio fluxo, fixo).
         let linhaFormaPagamentoHtml = "";
         if (!dados.noCartao) {
-            const descricaoEscapadaForma = (dados.descricao || "").replace(/"/g, "&quot;");
+            const descricaoEscapadaForma = escaparHtml(dados.descricao || "");
             const nomesFormaPagamento = { dinheiro: "Dinheiro", pix: "PIX", debito: "Débito" };
             const textoAtual = dados.formaPagamento ? (nomesFormaPagamento[dados.formaPagamento] || dados.formaPagamento) : null;
             const textoBotaoForma = textoAtual
-                ? `${textoAtual}${dados.banco ? " · " + dados.banco : ""}`
+                ? `${textoAtual}${dados.banco ? " · " + escaparHtml(dados.banco) : ""}`
                 : "+ Forma de pagamento";
-            linhaFormaPagamentoHtml = `<button type="button" class="chip-acao botao-editar-forma-pagamento" title="Editar forma de pagamento" data-id="${documento.id}" data-grupo="${dados.grupoId || ""}" data-forma-atual="${dados.formaPagamento || ""}" data-banco-atual="${dados.banco || ""}" data-descricao="${descricaoEscapadaForma}">${textoBotaoForma}${textoAtual ? ICONE_LAPIS_PEQUENO : ""}</button>`;
+            linhaFormaPagamentoHtml = `<button type="button" class="chip-acao botao-editar-forma-pagamento" title="Editar forma de pagamento" data-id="${documento.id}" data-grupo="${dados.grupoId || ""}" data-forma-atual="${dados.formaPagamento || ""}" data-banco-atual="${escaparHtml(dados.banco || "")}" data-descricao="${descricaoEscapadaForma}">${textoBotaoForma}${textoAtual ? ICONE_LAPIS_PEQUENO : ""}</button>`;
         }
 
         // Chave PIX: se a forma de pagamento for PIX, sempre oferece um
@@ -2384,8 +2387,8 @@ document.addEventListener("DOMContentLoaded", function () {
             // Escapa aspas nos dois campos que viram atributo HTML — sem
             // isso, uma descrição ou chave com aspas (tipo Aluguel "novo
             // apto") quebraria o atributo e bagunçaria o botão inteiro
-            const chaveEscapada = (dados.chavePix || "").replace(/"/g, "&quot;");
-            const descricaoEscapada = (dados.descricao || "").replace(/"/g, "&quot;");
+            const chaveEscapada = escaparHtml(dados.chavePix || "");
+            const descricaoEscapada = escaparHtml(dados.descricao || "");
             const botaoCopiar = dados.chavePix
                 ? `<button type="button" class="chip-acao botao-copiar-pix" data-chave="${chaveEscapada}">Copiar PIX</button>`
                 : "";
@@ -2407,8 +2410,8 @@ document.addEventListener("DOMContentLoaded", function () {
         item.innerHTML = `
             <span class="ponto-categoria ponto-categoria-conta"></span>
             <div class="info-conta">
-                <div class="nome-conta">${dados.descricao}${badgeParcela}${badgeQuaseAcabando}${botaoEditarPendenciaHtml}</div>
-                <div class="meta-conta">${dados.categoria} · Vence dia ${dados.diaDoMes}</div>
+                <div class="nome-conta">${escaparHtml(dados.descricao)}${badgeParcela}${badgeQuaseAcabando}${botaoEditarPendenciaHtml}</div>
+                <div class="meta-conta">${escaparHtml(dados.categoria)} · Vence dia ${dados.diaDoMes}</div>
                 ${textoValorTotal}
                 ${textoPagoEm}
                 ${temChips ? `<div class="chips-conta">${linhaFormaPagamentoHtml}${linhaChavePixHtml}</div>` : ""}
@@ -3318,8 +3321,8 @@ document.addEventListener("DOMContentLoaded", function () {
             item.innerHTML = `
                 <span class="ponto-categoria"></span>
                 <div class="info-lancamento">
-                    <div class="descricao-lancamento">${tituloGrande}</div>
-                    <div class="meta-lancamento">${dados.categoria} · ${dataFormatada} às ${horaFormatada}</div>
+                    <div class="descricao-lancamento">${escaparHtml(tituloGrande)}</div>
+                    <div class="meta-lancamento">${escaparHtml(dados.categoria)} · ${dataFormatada} às ${horaFormatada}</div>
                 </div>
                 <span class="valor-lancamento">${sinal} ${formatarMoeda(dados.valor)}</span>
                 ${botaoDuplicarHtml}
@@ -3467,51 +3470,8 @@ document.addEventListener("DOMContentLoaded", function () {
         indicadorMesFechado.title = saldoAtualDoMes >= 0 ? "Mês fechou no positivo" : "Mês fechou no negativo";
     }
 
-    // ==========================================================================
-    // FORMATAR MOEDA
-    // ==========================================================================
-    function formatarMoeda(valor) {
-        // Corrige o "zero negativo" do JavaScript — quando uma conta bate
-        // exatamente em zero (tipo saldo - gastos - lembretes = 0), o
-        // resultado às vezes vem como -0 tecnicamente, e sem isso aqui
-        // apareceria "-R$ 0,00" na tela, o que é enganoso (não é negativo de verdade)
-        const valorCorrigido = valor === 0 ? 0 : valor;
-        return valorCorrigido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    }
 
-    // Converte texto digitado em número — remove pontos (separador de
-    // milhar) antes de trocar a vírgula por ponto decimal, então funciona
-    // tanto com "1500,00" quanto com "1.500,00"
-    function paraNumero(texto) {
-        return parseFloat(String(texto).replace(/\./g, "").replace(",", "."));
-    }
 
-    // Aplica a máscara "tipo caixa eletrônico": os dígitos digitados
-    // entram sempre da direita pra esquerda (representando centavos), sem
-    // precisar digitar vírgula — cada novo número empurra os anteriores
-    // pra esquerda, exatamente como um caixa eletrônico de banco
-    function aplicarMascaraValor(input) {
-        function reformatar() {
-            const digitos = input.value.replace(/\D/g, "");
-            if (digitos === "") {
-                input.value = "";
-                return;
-            }
-            const centavos = parseInt(digitos, 10);
-            const reais = Math.floor(centavos / 100);
-            const centavosRestantes = centavos % 100;
-            input.value = `${reais},${String(centavosRestantes).padStart(2, "0")}`;
-        }
-        input.addEventListener("input", () => {
-            reformatar();
-            input.setSelectionRange(input.value.length, input.value.length);
-        });
-        // Ao focar, joga o cursor pro final — impede editar no meio do
-        // número, que quebraria a lógica de "sempre entra pela direita"
-        input.addEventListener("focus", () => {
-            setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
-        });
-    }
 
     // ==========================================================================
     // GRÁFICO DE ROSCA — gastos por categoria do mês selecionado
@@ -3612,7 +3572,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             itemLegenda.innerHTML = `
                 <span class="ponto-legenda" style="background-color: ${cor}"></span>
-                <span class="nome-legenda">${item.nome}</span>
+                <span class="nome-legenda">${escaparHtml(item.nome)}</span>
                 <span class="percentual-legenda">${Math.round(percentual * 100)}%</span>
                 ${barraHtml}
             `;

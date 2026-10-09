@@ -378,6 +378,18 @@
                 Ao trocar o nome, todos os lançamentos antigos dessa categoria são atualizados também, pra manter tudo consistente no extrato.
             </p>
 
+            <div class="campo" id="campo-mesclar-categoria-wrapper" style="border-top: 1px solid var(--borda); padding-top: 14px; margin-top: 4px;">
+                <label for="campo-mesclar-categoria">Mesclar com outra categoria</label>
+                <select id="campo-mesclar-categoria"></select>
+                <p class="texto-explicativo-guardado" style="margin: 8px 0 10px 0; font-size: 12px;">
+                    Passa tudo desta categoria para a que você escolher (extrato, pendências, cartão e limite) e apaga esta. Não dá para desfazer.
+                </p>
+                <button type="button" class="botao-enviar" id="botao-mesclar-categoria" style="background: transparent; border: 1px solid var(--borda); color: var(--text-primary);">
+                    <span class="texto-botao">Mesclar categorias</span>
+                    <span class="spinner-botao" hidden></span>
+                </button>
+            </div>
+
             <div class="mensagem-aviso" id="mensagem-aviso-editar-categoria" role="alert"></div>
 
             <button type="button" class="botao-enviar" id="botao-salvar-editar-categoria">

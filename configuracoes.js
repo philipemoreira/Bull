@@ -1,6 +1,8 @@
+import { escaparHtml } from "./texto.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { collection, getDocs, doc, updateDoc, writeBatch, Timestamp, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, getDocs, getDoc, doc, updateDoc, writeBatch, Timestamp, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { pinValido, criarRegistroPin, conferirPin } from "./pin.js";
 import { suportaBiometria, biometriaAtiva, ativarBiometria, desativarBiometria } from "./biometria.js";
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -87,6 +89,90 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         uidAtual = usuario.uid;
         atualizarUiBiometria();
+    });
+
+
+    // ==========================================================================
+    // TROCAR A SENHA DE 8 DÍGITOS (o PIN do app)
+    // ==========================================================================
+    const fundoModalTrocarPin = document.getElementById("fundo-modal-trocar-pin");
+    const campoPinAtual = document.getElementById("campo-pin-atual");
+    const campoPinAtualWrapper = document.getElementById("campo-pin-atual-wrapper");
+    const campoPinNovo = document.getElementById("campo-pin-novo");
+    const campoPinNovoRepetir = document.getElementById("campo-pin-novo-repetir");
+    const mensagemAvisoTrocarPin = document.getElementById("mensagem-aviso-trocar-pin");
+    const botaoSalvarTrocarPin = document.getElementById("botao-salvar-trocar-pin");
+    let registroPinAtual = null;
+
+    function mostrarAvisoRapido(texto) {
+        const aviso = document.createElement("div");
+        aviso.className = "toast";
+        aviso.textContent = texto;
+        document.body.appendChild(aviso);
+        setTimeout(() => aviso.remove(), 2400);
+    }
+
+    [campoPinAtual, campoPinNovo, campoPinNovoRepetir].forEach((campo) => {
+        campo.addEventListener("input", () => { campo.value = campo.value.replace(/\D/g, "").slice(0, 8); });
+    });
+
+    document.getElementById("botao-abrir-trocar-pin").addEventListener("click", async () => {
+        if (!uidAtual) return;
+        campoPinAtual.value = "";
+        campoPinNovo.value = "";
+        campoPinNovoRepetir.value = "";
+        mensagemAvisoTrocarPin.classList.remove("visivel");
+        try {
+            const perfil = await getDoc(doc(db, "usuarios", uidAtual));
+            registroPinAtual = perfil.exists() && perfil.data().pinSenha ? perfil.data().pinSenha : null;
+        } catch (erro) {
+            registroPinAtual = null;
+        }
+        campoPinAtualWrapper.hidden = !registroPinAtual;
+        fundoModalTrocarPin.classList.add("aberto");
+    });
+    document.getElementById("botao-fechar-trocar-pin").addEventListener("click", () => fundoModalTrocarPin.classList.remove("aberto"));
+    fundoModalTrocarPin.addEventListener("click", (e) => { if (e.target === fundoModalTrocarPin) fundoModalTrocarPin.classList.remove("aberto"); });
+
+    botaoSalvarTrocarPin.addEventListener("click", async () => {
+        const avisar = (texto) => {
+            mensagemAvisoTrocarPin.textContent = texto;
+            mensagemAvisoTrocarPin.classList.add("visivel");
+        };
+        mensagemAvisoTrocarPin.classList.remove("visivel");
+
+        if (registroPinAtual && !(await conferirPin(campoPinAtual.value, registroPinAtual))) {
+            avisar("A senha atual não confere.");
+            return;
+        }
+        if (!pinValido(campoPinNovo.value)) {
+            avisar("A nova senha precisa ter exatamente 8 números.");
+            return;
+        }
+        if (campoPinNovo.value !== campoPinNovoRepetir.value) {
+            avisar("As duas senhas novas não são iguais.");
+            return;
+        }
+        if (registroPinAtual && campoPinNovo.value === campoPinAtual.value) {
+            avisar("A nova senha precisa ser diferente da atual.");
+            return;
+        }
+
+        const spinner = botaoSalvarTrocarPin.querySelector(".spinner-botao");
+        botaoSalvarTrocarPin.disabled = true;
+        spinner.hidden = false;
+        try {
+            const registro = await criarRegistroPin(campoPinNovo.value);
+            await updateDoc(doc(db, "usuarios", uidAtual), { pinSenha: registro });
+            fundoModalTrocarPin.classList.remove("aberto");
+            campoPinAtual.value = campoPinNovo.value = campoPinNovoRepetir.value = "";
+            mostrarAvisoRapido("Senha trocada ✓");
+        } catch (erro) {
+            avisar("Não deu pra salvar agora. Confere sua internet e tenta de novo.");
+        } finally {
+            botaoSalvarTrocarPin.disabled = false;
+            spinner.hidden = true;
+        }
     });
 
     // ==========================================================================
@@ -212,7 +298,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 item.className = "item-conta";
                 item.innerHTML = `
                     <div class="info-conta">
-                        <div class="nome-conta">${dados.dispositivo || "Aparelho desconhecido"}</div>
+                        <div class="nome-conta">${escaparHtml(dados.dispositivo || "Aparelho desconhecido")}</div>
                         <div class="meta-conta">${dataAcesso ? formatarDataHoraAcesso(dataAcesso) : "Data não disponível"}</div>
                     </div>
                 `;

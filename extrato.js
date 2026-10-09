@@ -1,3 +1,5 @@
+import { formatarMoeda, paraNumero } from "./util.js";
+import { escaparHtml } from "./texto.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -249,18 +251,18 @@ document.addEventListener("DOMContentLoaded", function () {
                     textoFormaPagamento += ` · ${nomesFormaPagamento[dados.formaPagamento] || dados.formaPagamento}`;
                 }
                 if (dados.banco) {
-                    textoFormaPagamento += ` · ${dados.banco}`;
+                    textoFormaPagamento += ` · ${escaparHtml(dados.banco)}`;
                 }
             }
 
             item.innerHTML = `
                 <span class="ponto-categoria"></span>
                 <div class="info-lancamento">
-                    <div class="descricao-lancamento">${tituloGrande}</div>
-                    <div class="meta-lancamento">${dados.categoria} · ${dataFormatada} às ${horaFormatada}${textoFormaPagamento}</div>
+                    <div class="descricao-lancamento">${escaparHtml(tituloGrande)}</div>
+                    <div class="meta-lancamento">${escaparHtml(dados.categoria)} · ${dataFormatada} às ${horaFormatada}${textoFormaPagamento}</div>
                 </div>
                 <span class="valor-lancamento">${sinal} ${formatarMoeda(dados.valor)}</span>
-                <button class="botao-excluir" data-id="${documento.id}" data-categoria="${dados.categoria}" data-item-cartao="${dados.ehItemCartao ? "1" : ""}" aria-label="Excluir lançamento">
+                <button class="botao-excluir" data-id="${documento.id}" data-categoria="${escaparHtml(dados.categoria)}" data-item-cartao="${dados.ehItemCartao ? "1" : ""}" aria-label="Excluir lançamento">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/>
                     </svg>
@@ -328,19 +330,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
-    // Converte texto digitado em número, aceitando vírgula ou ponto como
-    // separador decimal (os campos de valor viraram type="text" pra isso)
-    function paraNumero(texto) {
-        return parseFloat(String(texto).replace(/\./g, "").replace(",", "."));
-    }
 
-    function formatarMoeda(valor) {
-        // Corrige o "zero negativo" do JavaScript — quando uma conta bate
-        // exatamente em zero (tipo saldo - gastos - lembretes = 0), o
-        // resultado às vezes vem como -0 tecnicamente, e sem isso aqui
-        // apareceria "-R$ 0,00" na tela, o que é enganoso (não é negativo de verdade)
-        const valorCorrigido = valor === 0 ? 0 : valor;
-        return valorCorrigido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    }
 
 });

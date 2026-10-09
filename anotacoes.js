@@ -1,3 +1,5 @@
+import { formatarMoeda, paraNumero, aplicarMascaraValor, mesReferenciaString } from "./util.js";
+import { escaparHtml } from "./texto.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -95,11 +97,6 @@ document.addEventListener("DOMContentLoaded", function () {
     let uidAtual = null;
     let mesSelecionado = new Date();
 
-    // Formata pro padrão "AAAA-MM" — mesmo campo usado nos lançamentos pra
-    // decidir em qual mês eles contam (separado da data exibida neles)
-    function mesReferenciaString(data) {
-        return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}`;
-    }
     let modoSelecao = false;
     let idEmEdicao = null; // null = criando novo | string = editando esse lembrete
     let ultimoTotalAnotacoes = 0; // usado pra recalcular o saldo quando o saldo real mudar
@@ -259,7 +256,7 @@ document.addEventListener("DOMContentLoaded", function () {
             item.innerHTML = `
                 ${modoSelecao ? `<input type="checkbox" class="checkbox-selecao" data-id="${documento.id}">` : ""}
                 <div class="info-conta">
-                    <div class="nome-conta">${dados.nome}</div>
+                    <div class="nome-conta">${escaparHtml(dados.nome)}</div>
                     <div class="meta-conta">${textoVencimento}${dataCriacaoTexto}</div>
                 </div>
                 <span class="valor-conta">${formatarMoeda(dados.valor || 0)}</span>
@@ -452,43 +449,7 @@ document.addEventListener("DOMContentLoaded", function () {
         fecharModalAnotacao();
     });
 
-    // Converte texto digitado em número — remove pontos (separador de
-    // milhar) antes de trocar a vírgula por ponto decimal
-    function paraNumero(texto) {
-        return parseFloat(String(texto).replace(/\./g, "").replace(",", "."));
-    }
 
-    // Aplica a máscara "tipo caixa eletrônico": os dígitos digitados
-    // entram sempre da direita pra esquerda (representando centavos), sem
-    // precisar digitar vírgula
-    function aplicarMascaraValor(input) {
-        function reformatar() {
-            const digitos = input.value.replace(/\D/g, "");
-            if (digitos === "") {
-                input.value = "";
-                return;
-            }
-            const centavos = parseInt(digitos, 10);
-            const reais = Math.floor(centavos / 100);
-            const centavosRestantes = centavos % 100;
-            input.value = `${reais},${String(centavosRestantes).padStart(2, "0")}`;
-        }
-        input.addEventListener("input", () => {
-            reformatar();
-            input.setSelectionRange(input.value.length, input.value.length);
-        });
-        input.addEventListener("focus", () => {
-            setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
-        });
-    }
 
-    function formatarMoeda(valor) {
-        // Corrige o "zero negativo" do JavaScript — quando uma conta bate
-        // exatamente em zero (tipo saldo - gastos - lembretes = 0), o
-        // resultado às vezes vem como -0 tecnicamente, e sem isso aqui
-        // apareceria "-R$ 0,00" na tela, o que é enganoso (não é negativo de verdade)
-        const valorCorrigido = valor === 0 ? 0 : valor;
-        return valorCorrigido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    }
 
 });

@@ -1,3 +1,6 @@
+import { calcularSaldoBanco } from "./saldoBanco.js";
+import { formatarMoeda, paraNumero, aplicarMascaraValor, mesReferenciaString, dataDeFechamento, faturaJaFechou } from "./util.js";
+import { escaparHtml } from "./texto.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -67,6 +70,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const fundoModalPagarFatura = document.getElementById("fundo-modal-pagar-fatura");
     const botaoFecharPagarFatura = document.getElementById("botao-fechar-pagar-fatura");
     const textoPagarFaturaValor = document.getElementById("texto-pagar-fatura-valor");
+    const campoValorPagarFatura = document.getElementById("campo-valor-pagar-fatura");
     const campoFormaPagarFatura = document.getElementById("campo-forma-pagar-fatura");
     const campoBancoPagarFaturaWrapper = document.getElementById("campo-banco-pagar-fatura-wrapper");
     const campoBancoPagarFatura = document.getElementById("campo-banco-pagar-fatura");
@@ -130,20 +134,7 @@ document.addEventListener("DOMContentLoaded", function () {
         timeoutToast = setTimeout(() => { toast.hidden = true; }, duracaoMs);
     }
 
-    function mesReferenciaString(data) {
-        return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}`;
-    }
 
-    // A data em que uma fatura específica (identificada pelo mês que ela
-    // fecha) efetivamente fecha — usa o menor dia entre o dia de
-    // fechamento do cartão e o último dia real daquele mês (fevereiro
-    // não tem dia 30, por exemplo)
-    function dataDeFechamento(mesReferencia, diaFechamento) {
-        const [ano, mes] = mesReferencia.split("-").map(Number);
-        const ultimoDiaDoMes = new Date(ano, mes, 0).getDate();
-        const diaFinal = Math.min(diaFechamento, ultimoDiaDoMes);
-        return new Date(ano, mes - 1, diaFinal);
-    }
 
     // A data de vencimento de uma fatura específica — se o dia de
     // vencimento for MENOR que o de fechamento, o vencimento cai no mês
@@ -165,47 +156,9 @@ document.addEventListener("DOMContentLoaded", function () {
         return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
     }
 
-    // Uma fatura é considerada "fechada" (pronta pra pagar) a partir do
-    // PRÓPRIO dia de fechamento (inclusive) — uma compra feita nesse dia já
-    // vai pra fatura seguinte
-    function faturaJaFechou(mesReferencia, diaFechamento) {
-        const hoje = new Date();
-        const hojeSoData = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-        return hojeSoData >= dataDeFechamento(mesReferencia, diaFechamento);
-    }
 
-    function formatarMoeda(valor) {
-        const valorCorrigido = valor === 0 ? 0 : valor;
-        return valorCorrigido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    }
 
-    function paraNumero(texto) {
-        return parseFloat(String(texto).replace(/\./g, "").replace(",", "."));
-    }
 
-    // Aplica a máscara "tipo caixa eletrônico": os dígitos digitados
-    // entram sempre da direita pra esquerda (representando centavos), sem
-    // precisar digitar vírgula
-    function aplicarMascaraValor(input) {
-        function reformatar() {
-            const digitos = input.value.replace(/\D/g, "");
-            if (digitos === "") {
-                input.value = "";
-                return;
-            }
-            const centavos = parseInt(digitos, 10);
-            const reais = Math.floor(centavos / 100);
-            const centavosRestantes = centavos % 100;
-            input.value = `${reais},${String(centavosRestantes).padStart(2, "0")}`;
-        }
-        input.addEventListener("input", () => {
-            reformatar();
-            input.setSelectionRange(input.value.length, input.value.length);
-        });
-        input.addEventListener("focus", () => {
-            setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
-        });
-    }
 
     // ==========================================================================
     // LOGIN E CARREGAMENTO INICIAL
@@ -213,6 +166,7 @@ document.addEventListener("DOMContentLoaded", function () {
     aplicarMascaraValor(campoSaldoInicialBanco);
     aplicarMascaraValor(campoCorrigirSaldoBanco);
     aplicarMascaraValor(campoLimiteCartao);
+    aplicarMascaraValor(campoValorPagarFatura);
 
     onAuthStateChanged(auth, async (usuario) => {
         if (!usuario) {
@@ -412,6 +366,124 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
 
+
+    // ==========================================================================
+    // EDITAR COMPRA DO CARTÃO — nome, valor, categoria e mês da fatura
+    // ==========================================================================
+    const fundoModalEditarItem = document.getElementById("fundo-modal-editar-item");
+    const campoEditarItemNome = document.getElementById("campo-editar-item-nome");
+    const campoEditarItemValor = document.getElementById("campo-editar-item-valor");
+    const campoEditarItemCategoria = document.getElementById("campo-editar-item-categoria");
+    const campoEditarItemMes = document.getElementById("campo-editar-item-mes");
+    const linhaEditarItemGrupo = document.getElementById("linha-editar-item-grupo");
+    const campoEditarItemGrupo = document.getElementById("campo-editar-item-grupo");
+    const mensagemAvisoEditarItem = document.getElementById("mensagem-aviso-editar-item");
+    const botaoSalvarEditarItem = document.getElementById("botao-salvar-editar-item");
+    let itemEmEdicao = null; // { id, dados }
+    aplicarMascaraValor(campoEditarItemValor);
+
+    async function abrirModalEditarItem(id) {
+        const snapshot = await getDoc(doc(db, "usuarios", uidAtual, "pendencias", id));
+        if (!snapshot.exists()) return;
+        const dados = snapshot.data();
+        itemEmEdicao = { id, dados };
+
+        campoEditarItemNome.value = dados.descricao || "";
+        campoEditarItemValor.value = (dados.valor || 0).toFixed(2).replace(".", ",");
+
+        // Categorias: "Outros" + as suas (as mesmas do resto do app)
+        const nomes = new Set(["Outros"]);
+        try {
+            const resultado = await getDocs(collection(db, "usuarios", uidAtual, "categorias"));
+            resultado.forEach((d) => { if (d.data().tipo === "gasto" && d.data().nome) nomes.add(d.data().nome); });
+        } catch (erro) { /* segue só com as que já temos */ }
+        if (dados.categoria) nomes.add(dados.categoria);
+        campoEditarItemCategoria.innerHTML = "";
+        [...nomes].sort((a, b) => a.localeCompare(b, "pt-BR")).forEach((nome) => {
+            const opcao = document.createElement("option");
+            opcao.value = nome;
+            opcao.textContent = nome;
+            campoEditarItemCategoria.appendChild(opcao);
+        });
+        campoEditarItemCategoria.value = dados.categoria || "Outros";
+
+        // Meses: 8 antes até 14 depois do mês atual da compra
+        const [ano, mes] = (dados.mesReferencia || mesReferenciaString(new Date())).split("-").map(Number);
+        campoEditarItemMes.innerHTML = "";
+        for (let deslocamento = -8; deslocamento <= 14; deslocamento++) {
+            const d = new Date(ano, mes - 1 + deslocamento, 1);
+            const valorMes = mesReferenciaString(d);
+            const opcao = document.createElement("option");
+            opcao.value = valorMes;
+            opcao.textContent = formatarMesReferencia(valorMes);
+            campoEditarItemMes.appendChild(opcao);
+        }
+        campoEditarItemMes.value = dados.mesReferencia;
+
+        linhaEditarItemGrupo.style.display = dados.grupoId ? "flex" : "none";
+        campoEditarItemGrupo.checked = true;
+        mensagemAvisoEditarItem.classList.remove("visivel");
+        fundoModalEditarItem.classList.add("aberto");
+    }
+
+    function fecharModalEditarItem() {
+        fundoModalEditarItem.classList.remove("aberto");
+        itemEmEdicao = null;
+    }
+    document.getElementById("botao-fechar-editar-item").addEventListener("click", fecharModalEditarItem);
+    fundoModalEditarItem.addEventListener("click", (e) => { if (e.target === fundoModalEditarItem) fecharModalEditarItem(); });
+
+    botaoSalvarEditarItem.addEventListener("click", async () => {
+        if (!itemEmEdicao) return;
+        mensagemAvisoEditarItem.classList.remove("visivel");
+        const novoNome = campoEditarItemNome.value.trim();
+        const novoValor = Math.round(paraNumero(campoEditarItemValor.value) * 100) / 100;
+        if (!novoNome) {
+            mensagemAvisoEditarItem.textContent = "Digita um nome.";
+            mensagemAvisoEditarItem.classList.add("visivel");
+            return;
+        }
+        if (!novoValor || novoValor <= 0) {
+            mensagemAvisoEditarItem.textContent = "Digita um valor maior que zero.";
+            mensagemAvisoEditarItem.classList.add("visivel");
+            return;
+        }
+        const spinner = botaoSalvarEditarItem.querySelector(".spinner-botao");
+        botaoSalvarEditarItem.disabled = true;
+        spinner.hidden = false;
+        try {
+            const { id, dados } = itemEmEdicao;
+            const comuns = { descricao: novoNome, valor: novoValor, categoria: campoEditarItemCategoria.value || dados.categoria };
+            const lote = writeBatch(db);
+            const aplicarNoGrupo = !!dados.grupoId && campoEditarItemGrupo.checked;
+            const extraGrupo = (aplicarNoGrupo && dados.origem === "parcelado")
+                ? { valorTotalCompra: Math.round(novoValor * dados.totalParcelas * 100) / 100 }
+                : {};
+            // Este item recebe tudo, inclusive o mês; os outros só nome/valor/categoria
+            lote.update(doc(db, "usuarios", uidAtual, "pendencias", id), { ...comuns, ...extraGrupo, mesReferencia: campoEditarItemMes.value });
+            if (aplicarNoGrupo) {
+                const resultado = await getDocs(query(
+                    collection(db, "usuarios", uidAtual, "pendencias"),
+                    where("grupoId", "==", dados.grupoId),
+                    where("pago", "==", false)
+                ));
+                resultado.forEach((documento) => {
+                    if (documento.id === id) return;
+                    lote.update(documento.ref, { ...comuns, ...extraGrupo });
+                });
+            }
+            await lote.commit();
+            fecharModalEditarItem();
+            mostrarToast("Compra atualizada ✓");
+        } catch (erro) {
+            mensagemAvisoEditarItem.textContent = "Não deu pra salvar agora. Confere sua internet e tenta de novo.";
+            mensagemAvisoEditarItem.classList.add("visivel");
+        } finally {
+            botaoSalvarEditarItem.disabled = false;
+            spinner.hidden = true;
+        }
+    });
+
     // ==========================================================================
     // FATURAS — uma por cartão cadastrado
     // ==========================================================================
@@ -419,6 +491,7 @@ document.addEventListener("DOMContentLoaded", function () {
         pagamentoFaturaPendente = { itensNaoPagos, totalFatura, cartaoId, textoFatura };
         textoPagarFaturaValor.textContent = `Pagamento ${textoFatura} do ${nomeDoCartao(cartaoId)}, no valor de ${formatarMoeda(totalFatura)}.`;
 
+        campoValorPagarFatura.value = totalFatura.toFixed(2).replace(".", ",");
         campoFormaPagarFatura.value = "";
         campoBancoPagarFaturaWrapper.hidden = true;
         campoBancoPagarFatura.required = false;
@@ -483,7 +556,14 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        const { itensNaoPagos, totalFatura, cartaoId } = pagamentoFaturaPendente;
+        const { itensNaoPagos, cartaoId } = pagamentoFaturaPendente;
+        const valorDigitado = paraNumero(campoValorPagarFatura.value);
+        if (!valorDigitado || valorDigitado <= 0) {
+            mensagemAvisoPagarFatura.textContent = "Digita o valor que você pagou.";
+            mensagemAvisoPagarFatura.classList.add("visivel");
+            return;
+        }
+        const totalFatura = Math.round(valorDigitado * 100) / 100;
         const spinner = botaoConfirmarPagarFatura.querySelector(".spinner-botao");
         botaoConfirmarPagarFatura.disabled = true;
         spinner.hidden = false;
@@ -675,8 +755,11 @@ document.addEventListener("DOMContentLoaded", function () {
                         : (dados.origem === "fixo" ? `<span class="badge-parcela">Fixo</span>` : "");
                     return `
                         <li class="cc-item">
-                            <div class="cc-item-nome">${dados.descricao}${etiqueta}</div>
+                            <div class="cc-item-nome">${escaparHtml(dados.descricao)}${etiqueta}</div>
                             <span class="cc-item-valor ${dados.pago ? "paga" : ""}">${formatarMoeda(dados.valor)}</span>
+                            <button type="button" class="cc-item-editar" data-acao-item="editar" data-id="${documento.id}" aria-label="Editar item">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                            </button>
                             <button class="botao-excluir-conta cc-item-excluir" data-id="${documento.id}" aria-label="Excluir item">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/>
@@ -730,7 +813,7 @@ document.addEventListener("DOMContentLoaded", function () {
             item.className = "fatura-cartao-item cc-card";
             item.innerHTML = `
                 <div class="cc-cabecalho">
-                    <span class="cc-nome">${cartao.nome}</span>
+                    <span class="cc-nome">${escaparHtml(cartao.nome)}</span>
                     <button type="button" class="cc-editar" data-acao="editar" data-cartao="${cartao.id}">Editar</button>
                 </div>
                 <span class="cc-rotulo">Limite disponível</span>
@@ -752,6 +835,12 @@ document.addEventListener("DOMContentLoaded", function () {
         const botaoExcluirItem = evento.target.closest(".botao-excluir-conta");
         if (botaoExcluirItem) {
             await handlerCliqueListaItens(evento);
+            return;
+        }
+
+        const botaoEditarItem = evento.target.closest("[data-acao-item='editar']");
+        if (botaoEditarItem) {
+            abrirModalEditarItem(botaoEditarItem.dataset.id);
             return;
         }
 
@@ -849,47 +938,8 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    function calcularSaldoBanco(nomeBanco, saldoInicial) {
-        let total = saldoInicial || 0;
-        todosOsLancamentos.forEach((documento) => {
-            const dados = documento.data();
-            // "Guardar Dinheiro" e "Retirada da Reserva" NUNCA entram como
-            // ganho/gasto normal aqui — são tratados como transferência,
-            // pela lógica logo abaixo. Sem essa exclusão, todo depósito no
-            // cofrinho seria contado por engano como se fosse renda de
-            // verdade, inflando o saldo do banco.
-            const ehCategoriaEspecial = dados.categoria === "Guardar Dinheiro" || dados.categoria === "Retirada da Reserva";
-
-            if (dados.tipo === "ganho" && !ehCategoriaEspecial && dados.banco === nomeBanco) {
-                total += dados.valor;
-            }
-            if (dados.tipo === "gasto" && !ehCategoriaEspecial && dados.categoria !== "Fatura do Cartão" && (dados.formaPagamento === "pix" || dados.formaPagamento === "debito") && dados.banco === nomeBanco) {
-                total -= dados.valor;
-            }
-            // Pagamento de fatura do cartão — não é PIX nem Débito
-            // (é um tipo de pagamento próprio), mas também sai de um banco
-            // de verdade, então desconta igual
-            if (dados.categoria === "Fatura do Cartão" && dados.banco === nomeBanco) {
-                total -= dados.valor;
-            }
-
-            // Guardar/Retirar viram TRANSFERÊNCIA entre bancos. O campo
-            // "banco" de cada lançamento já carrega o sinal certo através
-            // do próprio valor: depósito (valor positivo, banco=destino)
-            // soma no destino; a 1ª perna da retirada (valor negativo,
-            // banco=de-onde-saiu) já desconta sozinha, só de somar; a 2ª
-            // perna "Retirada da Reserva" (valor positivo, banco=pra-onde-
-            // -voltou) soma no destino — as 4 pontas fecham a conta certa.
-            if (ehCategoriaEspecial && dados.banco === nomeBanco) {
-                total += dados.valor;
-            }
-            // Só o DEPÓSITO (valor positivo) tem "bancoOrigem" — de onde
-            // saiu o dinheiro pra ser guardado ali. Precisa descontar do
-            // lado de origem também, senão o dinheiro "nasceria do nada".
-            if (dados.categoria === "Guardar Dinheiro" && dados.valor > 0 && dados.bancoOrigem === nomeBanco) {
-                total -= dados.valor;
-            }
-        });
+    function calcularSaldoDeUmBanco(nomeBanco, saldoInicial) {
+        const total = calcularSaldoBanco(nomeBanco, saldoInicial, todosOsLancamentos);
         return total;
     }
 
@@ -898,14 +948,14 @@ document.addEventListener("DOMContentLoaded", function () {
         bancosReaisVazio.hidden = listaDeBancosReais.length > 0;
 
         listaDeBancosReais.forEach((banco) => {
-            const saldo = calcularSaldoBanco(banco.nome, banco.saldoInicial);
+            const saldo = calcularSaldoDeUmBanco(banco.nome, banco.saldoInicial);
             const selo = banco.principal ? ` <span class="badge-cartao">Principal</span>` : "";
 
             const item = document.createElement("div");
             item.className = "fatura-cartao-item";
             item.innerHTML = `
                 <div class="fatura-cartao-cabecalho">
-                    <span class="fatura-cartao-nome">${banco.nome}${selo}</span>
+                    <span class="fatura-cartao-nome">${escaparHtml(banco.nome)}${selo}</span>
                     <button type="button" class="link-botao-simples" data-banco="${banco.id}">Editar</button>
                 </div>
                 <span class="fatura-cartao-valor">${formatarMoeda(saldo)}</span>
@@ -946,7 +996,7 @@ document.addEventListener("DOMContentLoaded", function () {
         // O ajuste rápido só faz sentido editando um banco que já existe —
         // pra um banco novo, "saldo inicial" já é o próprio ponto de partida
         if (banco) {
-            const saldoAtual = calcularSaldoBanco(banco.nome, banco.saldoInicial);
+            const saldoAtual = calcularSaldoDeUmBanco(banco.nome, banco.saldoInicial);
             textoSaldoAtualBanco.textContent = `Saldo atual calculado: ${formatarMoeda(saldoAtual)}`;
             textoSaldoAtualBanco.hidden = false;
             campoCorrigirSaldoWrapper.hidden = false;
@@ -1015,7 +1065,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const bancoAtual = bancoRealEmEdicaoId ? listaDeBancosReais.find((b) => b.id === bancoRealEmEdicaoId) : null;
         if (bancoAtual && campoCorrigirSaldoBanco.value.trim()) {
             const valorCorrigido = paraNumero(campoCorrigirSaldoBanco.value);
-            const saldoAtualCalculado = calcularSaldoBanco(bancoAtual.nome, bancoAtual.saldoInicial || 0);
+            const saldoAtualCalculado = calcularSaldoDeUmBanco(bancoAtual.nome, bancoAtual.saldoInicial || 0);
             const diferenca = saldoAtualCalculado - (bancoAtual.saldoInicial || 0); // soma de tudo que já entrou/saiu
             saldoInicial = valorCorrigido - diferenca;
         }

@@ -1,3 +1,6 @@
+import { calcularSaldoBanco } from "./saldoBanco.js";
+import { formatarMoeda, paraNumero, aplicarMascaraValor, mesReferenciaString } from "./util.js";
+import { escaparHtml } from "./texto.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -109,14 +112,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let uidAtual = null;
 
-    // Formata pro padrão "AAAA-MM" — mesmo campo usado nos lançamentos pra
-    // decidir em qual mês eles contam (separado da data exibida neles).
-    // Aqui em Saldo Guardado não existe navegação por mês, então sempre
-    // usa o mês real de hoje.
-    function mesReferenciaString(data) {
-        return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}`;
-    }
     let totalAtual = 0;
+    let totalHistorico = 0;      // soma dos registros de "Guardar Dinheiro"
+    let bancoCofrinho = null;    // nome do banco ligado ao guardado (ou null)
+    let todosOsLancamentos = []; // todos os lançamentos (pra calcular o saldo do banco)
     let todosOsDepositos = []; // todos os lançamentos de "Guardar Dinheiro" (pra somar por meta)
     let metaEmEdicaoId = null;
 
@@ -132,6 +131,7 @@ document.addEventListener("DOMContentLoaded", function () {
         escutarGuardado();
         escutarMetas();
         escutarBancos();
+        escutarCofrinho();
     });
 
     // ==========================================================================
@@ -162,7 +162,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const sinal = ehRetirada ? "−" : "+";
 
                 const tituloGrande = dados.descricao || dados.meta || (ehRetirada ? "Retirada" : "Guardado");
-                const textoBanco = dados.banco ? ` · ${dados.banco}` : "";
+                const textoBanco = dados.banco ? ` · ${escaparHtml(dados.banco)}` : "";
 
                 // Só dá pra editar retiradas feitas depois dessa atualização —
                 // elas guardam o id do lançamento irmão (lancamentoParId).
@@ -183,12 +183,12 @@ document.addEventListener("DOMContentLoaded", function () {
                 item.innerHTML = `
                     <span class="ponto-categoria"></span>
                     <div class="info-lancamento">
-                        <div class="descricao-lancamento">${tituloGrande}</div>
+                        <div class="descricao-lancamento">${escaparHtml(tituloGrande)}</div>
                         <div class="meta-lancamento">Guardar Dinheiro${textoBanco} · ${dataFormatada}</div>
                     </div>
                     <span class="valor-lancamento">${sinal} ${formatarMoeda(Math.abs(dados.valor))}</span>
                     ${botaoEditarHtml}
-                    <button class="botao-excluir" data-id="${documento.id}" data-par-id="${dados.lancamentoParId || ""}" data-eh-retirada="${ehRetirada}" aria-label="Excluir">
+                    <button class="botao-excluir" data-id="${documento.id}" data-par-id="${dados.lancamentoParId || ""}" data-eh-retirada="${ehRetirada && !dados.ajuste}" aria-label="Excluir">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/>
                         </svg>
@@ -211,8 +211,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 listaGuardado.appendChild(item);
             });
 
-            totalAtual = total;
-            totalGuardadoEl.textContent = formatarMoeda(total);
+            totalHistorico = total;
+            aplicarTotal();
 
             todosOsDepositos = documentosOrdenados;
             renderizarMetas(); // os totais por meta dependem dos depósitos também
@@ -310,7 +310,7 @@ document.addEventListener("DOMContentLoaded", function () {
             item.style.alignItems = "stretch";
             item.innerHTML = `
                 <div style="display:flex; align-items:center; justify-content: space-between; width: 100%;">
-                    <span class="nome-conta">${meta.nome}</span>
+                    <span class="nome-conta">${escaparHtml(meta.nome)}</span>
                     <button type="button" class="link-editar-meta" data-id="${meta.id}">Editar</button>
                 </div>
                 ${barraHtml}
@@ -612,43 +612,171 @@ document.addEventListener("DOMContentLoaded", function () {
         fecharModalRetirada();
     });
 
-    // Converte texto digitado em número — remove pontos (separador de
-    // milhar) antes de trocar a vírgula por ponto decimal
-    function paraNumero(texto) {
-        return parseFloat(String(texto).replace(/\./g, "").replace(",", "."));
+
+
+    // ==========================================================================
+    // BANCO DO GUARDADO — se o guardado estiver ligado a um banco (que é só
+    // pra guardar), o total é o próprio saldo desse banco: gastou lá, o
+    // guardado diminui; entrou dinheiro, aumenta. Nunca fica falso.
+    // ==========================================================================
+    const textoBotaoCofrinho = document.getElementById("botao-banco-cofrinho");
+
+    function saldoDoBancoPeloNome(nomeBanco) {
+        const banco = listaDeBancos.find((b) => b.nome === nomeBanco);
+        if (!banco) return null;
+        const total = calcularSaldoBanco(nomeBanco, banco.saldoInicial, todosOsLancamentos);
+        return Math.round(total * 100) / 100;
     }
 
-    // Aplica a máscara "tipo caixa eletrônico": os dígitos digitados
-    // entram sempre da direita pra esquerda (representando centavos), sem
-    // precisar digitar vírgula
-    function aplicarMascaraValor(input) {
-        function reformatar() {
-            const digitos = input.value.replace(/\D/g, "");
-            if (digitos === "") {
-                input.value = "";
-                return;
-            }
-            const centavos = parseInt(digitos, 10);
-            const reais = Math.floor(centavos / 100);
-            const centavosRestantes = centavos % 100;
-            input.value = `${reais},${String(centavosRestantes).padStart(2, "0")}`;
+    function aplicarTotal() {
+        const saldo = bancoCofrinho ? saldoDoBancoPeloNome(bancoCofrinho) : null;
+        const ligado = saldo !== null;
+        totalAtual = ligado ? Math.max(saldo, 0) : totalHistorico;
+        totalGuardadoEl.textContent = formatarMoeda(totalAtual);
+        textoBotaoCofrinho.textContent = ligado ? `Acompanhando o saldo de ${bancoCofrinho} · trocar` : "Ligar o guardado ao saldo de um banco";
+        document.getElementById("botao-abrir-ajuste").hidden = ligado;
+        if (typeof renderizarMetas === "function") renderizarMetas();
+    }
+
+    function escutarCofrinho() {
+        onSnapshot(doc(db, "usuarios", uidAtual), (snap) => {
+            bancoCofrinho = snap.exists() ? (snap.data().bancoCofrinho || null) : null;
+            aplicarTotal();
+        });
+        onSnapshot(collection(db, "usuarios", uidAtual, "lancamentos"), (snap) => {
+            todosOsLancamentos = snap.docs;
+            aplicarTotal();
+        });
+    }
+
+    const fundoModalCofrinho = document.getElementById("fundo-modal-cofrinho");
+    const campoBancoCofrinho = document.getElementById("campo-banco-cofrinho");
+    const mensagemAvisoCofrinho = document.getElementById("mensagem-aviso-cofrinho");
+    textoBotaoCofrinho.addEventListener("click", () => {
+        mensagemAvisoCofrinho.classList.remove("visivel");
+        campoBancoCofrinho.innerHTML = "";
+        const nenhum = document.createElement("option");
+        nenhum.value = "";
+        nenhum.textContent = "Não ligar (usar só os registros do guardado)";
+        campoBancoCofrinho.appendChild(nenhum);
+        listaDeBancos.forEach((b) => {
+            const opcao = document.createElement("option");
+            opcao.value = b.nome;
+            opcao.textContent = b.nome;
+            campoBancoCofrinho.appendChild(opcao);
+        });
+        campoBancoCofrinho.value = bancoCofrinho || "";
+        fundoModalCofrinho.classList.add("aberto");
+    });
+    document.getElementById("botao-fechar-cofrinho").addEventListener("click", () => fundoModalCofrinho.classList.remove("aberto"));
+    fundoModalCofrinho.addEventListener("click", (e) => { if (e.target === fundoModalCofrinho) fundoModalCofrinho.classList.remove("aberto"); });
+
+    document.getElementById("botao-salvar-cofrinho").addEventListener("click", async () => {
+        const escolhido = campoBancoCofrinho.value || null;
+        if (escolhido === bancoCofrinho) { fundoModalCofrinho.classList.remove("aberto"); return; }
+        const depois = escolhido ? Math.max(saldoDoBancoPeloNome(escolhido) ?? 0, 0) : totalHistorico;
+        fundoModalCofrinho.classList.remove("aberto");
+        const confirmou = await confirmarComTelinha(
+            `O total guardado vai de ${formatarMoeda(totalAtual)} para ${formatarMoeda(depois)}. Confirma?`,
+            "Trocar banco do guardado"
+        );
+        if (!confirmou) return;
+        try {
+            await updateDoc(doc(db, "usuarios", uidAtual), { bancoCofrinho: escolhido });
+        } catch (erro) {
+            console.error(erro);
         }
-        input.addEventListener("input", () => {
-            reformatar();
-            input.setSelectionRange(input.value.length, input.value.length);
-        });
-        input.addEventListener("focus", () => {
-            setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+    });
+
+    // ==========================================================================
+    // AJUSTAR VALOR GUARDADO — quando um gasto saiu do guardado sem a retirada
+    // ter sido registrada. Cria só UM lançamento negativo em "Guardar Dinheiro"
+    // (a diferença). Não mexe no saldo do banco: o gasto original já o descontou.
+    // ==========================================================================
+    const fundoModalAjuste = document.getElementById("fundo-modal-ajuste");
+    const campoValorAjuste = document.getElementById("campo-valor-ajuste");
+    const campoMetaAjuste = document.getElementById("campo-meta-ajuste");
+    const campoBancoAjuste = document.getElementById("campo-banco-ajuste");
+    const campoMetaAjusteWrapper = document.getElementById("campo-meta-ajuste-wrapper");
+    const campoBancoAjusteWrapper = document.getElementById("campo-banco-ajuste-wrapper");
+    const mensagemAvisoAjuste = document.getElementById("mensagem-aviso-ajuste");
+    const botaoConfirmarAjuste = document.getElementById("botao-confirmar-ajuste");
+    aplicarMascaraValor(campoValorAjuste);
+
+    function preencherSelectAjuste(select, wrapper, nomes) {
+        select.innerHTML = "";
+        wrapper.hidden = nomes.length === 0;
+        const vazio = document.createElement("option");
+        vazio.value = "";
+        vazio.textContent = "Não especificar";
+        select.appendChild(vazio);
+        nomes.forEach((nome) => {
+            const opcao = document.createElement("option");
+            opcao.value = nome;
+            opcao.textContent = nome;
+            select.appendChild(opcao);
         });
     }
 
-    function formatarMoeda(valor) {
-        // Corrige o "zero negativo" do JavaScript — quando uma conta bate
-        // exatamente em zero (tipo saldo - gastos - lembretes = 0), o
-        // resultado às vezes vem como -0 tecnicamente, e sem isso aqui
-        // apareceria "-R$ 0,00" na tela, o que é enganoso (não é negativo de verdade)
-        const valorCorrigido = valor === 0 ? 0 : valor;
-        return valorCorrigido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    }
+    document.getElementById("botao-abrir-ajuste").addEventListener("click", () => {
+        document.getElementById("texto-atual-ajuste").textContent = `O app mostra ${formatarMoeda(totalAtual)} guardado.`;
+        campoValorAjuste.value = "";
+        mensagemAvisoAjuste.classList.remove("visivel");
+        preencherSelectAjuste(campoMetaAjuste, campoMetaAjusteWrapper, listaDeMetas.map((m) => m.nome));
+        preencherSelectAjuste(campoBancoAjuste, campoBancoAjusteWrapper, listaDeBancos.map((b) => b.nome));
+        fundoModalAjuste.classList.add("aberto");
+    });
+    document.getElementById("botao-fechar-ajuste").addEventListener("click", () => fundoModalAjuste.classList.remove("aberto"));
+    fundoModalAjuste.addEventListener("click", (e) => { if (e.target === fundoModalAjuste) fundoModalAjuste.classList.remove("aberto"); });
+
+    botaoConfirmarAjuste.addEventListener("click", async () => {
+        mensagemAvisoAjuste.classList.remove("visivel");
+        const real = paraNumero(campoValorAjuste.value);
+        if (isNaN(real) || real < 0) {
+            mensagemAvisoAjuste.textContent = "Digita quanto você tem guardado de verdade (pode ser 0).";
+            mensagemAvisoAjuste.classList.add("visivel");
+            return;
+        }
+        const diferencaCentavos = Math.round(totalAtual * 100) - Math.round(real * 100);
+        if (diferencaCentavos === 0) {
+            mensagemAvisoAjuste.textContent = "Já está certo, não precisa ajustar.";
+            mensagemAvisoAjuste.classList.add("visivel");
+            return;
+        }
+        if (diferencaCentavos < 0) {
+            mensagemAvisoAjuste.textContent = "Esse valor é maior do que o app mostra. Para guardar mais, use o botão de guardar dinheiro no início.";
+            mensagemAvisoAjuste.classList.add("visivel");
+            return;
+        }
+        const diferenca = diferencaCentavos / 100;
+        const confirmou = await confirmarComTelinha(`Vou diminuir ${formatarMoeda(diferenca)} do guardado, deixando ${formatarMoeda(real)}. Seu saldo do banco não muda. Confirma?`);
+        if (!confirmou) return;
+
+        botaoConfirmarAjuste.disabled = true;
+        try {
+            const agora = new Date();
+            await addDoc(collection(db, "usuarios", uidAtual, "lancamentos"), {
+                tipo: "gasto",
+                valor: -diferenca,
+                categoria: "Guardar Dinheiro",
+                descricao: "Ajuste do guardado",
+                ajuste: true,
+                banco: campoBancoAjuste.value || null,
+                meta: campoMetaAjuste.value || null,
+                data: Timestamp.fromDate(agora),
+                mesReferencia: mesReferenciaString(agora),
+                criadoEm: serverTimestamp()
+            });
+            fundoModalAjuste.classList.remove("aberto");
+        } catch (erro) {
+            console.error(erro);
+            mensagemAvisoAjuste.textContent = "Não consegui ajustar. Tenta de novo.";
+            mensagemAvisoAjuste.classList.add("visivel");
+        }
+        botaoConfirmarAjuste.disabled = false;
+    });
+
+
+
 
 });

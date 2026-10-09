@@ -1,3 +1,4 @@
+import { formatarMoeda } from "./util.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { collection, query, where, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -14,10 +15,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const nomesFormaPagamento = { dinheiro: "Dinheiro", pix: "PIX", debito: "Débito" };
 
-    function formatarMoeda(valor) {
-        const valorCorrigido = valor === 0 ? 0 : valor;
-        return valorCorrigido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    }
 
     onAuthStateChanged(auth, async (usuario) => {
         if (!usuario) {
@@ -104,7 +101,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const dataPagamento = dados.dataPagamento.toDate();
                 const dataFormatada = dataPagamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
                 const textoForma = nomesFormaPagamento[dados.formaPagamento] || dados.formaPagamento;
-                const textoBanco = dados.banco ? ` · ${dados.banco}` : "";
+                const textoBanco = dados.banco ? ` · ${escaparHtml(dados.banco)}` : "";
 
                 const item = document.createElement("li");
                 item.className = "item-lancamento tipo-gasto";

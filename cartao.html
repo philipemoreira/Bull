@@ -162,6 +162,43 @@
         </div>
     </div>
 
+    <div class="fundo-modal" id="fundo-modal-editar-item">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Editar compra</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-editar-item" aria-label="Fechar">✕</button>
+            </div>
+            <div class="campo">
+                <label for="campo-editar-item-nome">Nome</label>
+                <input type="text" id="campo-editar-item-nome" maxlength="60" autocomplete="off">
+            </div>
+            <div class="campo">
+                <label for="campo-editar-item-valor">Valor</label>
+                <div class="valor-wrapper">
+                    <span class="prefixo-valor">R$</span>
+                    <input type="text" inputmode="decimal" id="campo-editar-item-valor" placeholder="0,00">
+                </div>
+            </div>
+            <div class="campo">
+                <label for="campo-editar-item-categoria">Categoria</label>
+                <select id="campo-editar-item-categoria"></select>
+            </div>
+            <div class="campo">
+                <label for="campo-editar-item-mes">Fatura (mês)</label>
+                <select id="campo-editar-item-mes"></select>
+            </div>
+            <label id="linha-editar-item-grupo" hidden style="display:none; gap:10px; align-items:flex-start; margin: 4px 0 12px; font-size:14px; color:var(--text-muted);">
+                <input type="checkbox" id="campo-editar-item-grupo" checked style="margin-top:3px;">
+                <span>Aplicar nome, valor e categoria também às próximas parcelas/meses ainda não pagos</span>
+            </label>
+            <div class="mensagem-aviso" id="mensagem-aviso-editar-item" role="alert"></div>
+            <button type="button" class="botao-enviar" id="botao-salvar-editar-item">
+                <span class="texto-botao">Salvar</span>
+                <span class="spinner-botao" hidden></span>
+            </button>
+        </div>
+    </div>
+
     <div class="fundo-modal" id="fundo-modal-pagar-fatura">
         <div class="modal-lancamento">
             <div class="cabecalho-modal">
@@ -169,6 +206,13 @@
                 <button class="botao-fechar-modal" id="botao-fechar-pagar-fatura" aria-label="Fechar">✕</button>
             </div>
             <p class="texto-explicativo-guardado" id="texto-pagar-fatura-valor"></p>
+            <div class="campo">
+                <label for="campo-valor-pagar-fatura">Valor pago (mude se pagou diferente)</label>
+                <div class="valor-wrapper">
+                    <span class="prefixo-valor">R$</span>
+                    <input type="text" inputmode="decimal" id="campo-valor-pagar-fatura" placeholder="0,00">
+                </div>
+            </div>
             <div class="campo">
                 <label for="campo-forma-pagar-fatura">Forma de pagamento</label>
                 <select id="campo-forma-pagar-fatura" required>
