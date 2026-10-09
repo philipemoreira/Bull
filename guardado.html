@@ -46,9 +46,17 @@
             <section class="cartao-saldo-principal">
                 <span class="rotulo-cartao">Total guardado</span>
                 <span class="valor-saldo-grande" id="total-guardado">R$ 0,00</span>
-                <button type="button" class="botao-retirar" id="botao-abrir-retirada">Retirar Dinheiro</button>
-                <button type="button" class="link-editar-meta" id="botao-abrir-ajuste" style="display:block; margin: 12px auto 0;">Ajustar valor guardado</button>
-                <button type="button" class="link-editar-meta" id="botao-banco-cofrinho" style="display:block; margin: 8px auto 0;">Ligar o guardado ao saldo de um banco</button>
+                <div class="guardado-acoes">
+                    <button type="button" class="botao-retirar" id="botao-abrir-retirada">Retirar Dinheiro</button>
+                    <button type="button" class="botao-guardado-secundario" id="botao-abrir-ajuste">Ajustar valor</button>
+                </div>
+                <div class="guardado-rodape">
+                    <span class="guardado-selo" id="texto-cofrinho">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10 12 4l9 6"/><path d="M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18"/></svg>
+                        <span id="texto-cofrinho-nome">Guardado avulso</span>
+                    </span>
+                    <button type="button" class="link-editar-meta" id="botao-banco-cofrinho">Ligar a um banco</button>
+                </div>
             </section>
 
             <p class="texto-explicativo-guardado">

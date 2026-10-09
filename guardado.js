@@ -633,8 +633,9 @@ document.addEventListener("DOMContentLoaded", function () {
         const ligado = saldo !== null;
         totalAtual = ligado ? Math.max(saldo, 0) : totalHistorico;
         totalGuardadoEl.textContent = formatarMoeda(totalAtual);
-        textoBotaoCofrinho.textContent = ligado ? `Acompanhando o saldo de ${bancoCofrinho} · trocar` : "Ligar o guardado ao saldo de um banco";
-        document.getElementById("botao-abrir-ajuste").hidden = ligado;
+        document.getElementById("texto-cofrinho-nome").textContent = ligado ? `Segue o saldo da ${bancoCofrinho}` : "Guardado avulso";
+        textoBotaoCofrinho.textContent = ligado ? "Trocar" : "Ligar a um banco";
+        document.getElementById("botao-abrir-ajuste").style.display = ligado ? "none" : "";
         if (typeof renderizarMetas === "function") renderizarMetas();
     }
 
