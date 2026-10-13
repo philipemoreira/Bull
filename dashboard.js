@@ -161,6 +161,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoEditarCategoria = document.getElementById("botao-editar-categoria");
     const campoNovaCategoriaWrapper = document.getElementById("campo-nova-categoria-wrapper");
     const campoNovaCategoria = document.getElementById("campo-nova-categoria");
+    const campoRepasseNovaCategoria = document.getElementById("campo-repasse-nova-categoria");
+    const linhaRepasseNovaCategoria = document.getElementById("linha-repasse-nova-categoria");
+    const campoRepasseCategoria = document.getElementById("campo-repasse-categoria");
     const campoVencimentoNovaCategoriaWrapper = document.getElementById("campo-vencimento-nova-categoria-wrapper");
     const campoVencimentoNovaCategoria = document.getElementById("campo-vencimento-nova-categoria");
     const campoBancoOrigemWrapper = document.getElementById("campo-banco-origem-wrapper");
@@ -733,11 +736,25 @@ document.addEventListener("DOMContentLoaded", function () {
         resultado.forEach((documento) => {
             const dados = documento.data();
             if (dados.tipo === "gasto" || dados.tipo === "ganho") {
-                categoriasCustomizadas[dados.tipo].push({ nome: dados.nome, id: documento.id });
+                categoriasCustomizadas[dados.tipo].push({ nome: dados.nome, id: documento.id, foraDosTotais: !!dados.foraDosTotais });
             }
         });
         // Dá uma cor diferente pra cada categoria sua
         registrarCategorias(categoriasCustomizadas.gasto.map((c) => c.nome));
+        refazerTotaisEGrafico();
+    }
+
+    // Categorias marcadas como "repasse/acerto": o dinheiro entra no saldo do
+    // banco normalmente, mas não conta em Ganhos, Gastos nem no gráfico
+    function ehForaDosTotais(nomeCategoria) {
+        return [...categoriasCustomizadas.gasto, ...categoriasCustomizadas.ganho]
+            .some((c) => c.nome === nomeCategoria && c.foraDosTotais);
+    }
+
+    function refazerTotaisEGrafico() {
+        if (!ultimosDocumentosDoMes || ultimosDocumentosDoMes.length === 0) return;
+        calcularTotais(ultimosDocumentosDoMes);
+        renderizarGrafico(ultimosDocumentosDoMes);
     }
 
     async function carregarOrcamentos() {
@@ -1056,6 +1073,8 @@ document.addEventListener("DOMContentLoaded", function () {
         const criandoNova = campoCategoria.value === "__nova__";
         campoNovaCategoriaWrapper.hidden = !criandoNova;
         campoNovaCategoria.required = criandoNova;
+        linhaRepasseNovaCategoria.hidden = !criandoNova || modoGuardar;
+        if (!criandoNova) campoRepasseNovaCategoria.checked = false;
         // Vencimento da categoria só aparece aqui quando Fixo/Parcelado NÃO
         // estão marcados — se estiverem, o vencimento já é perguntado uma
         // vez só ali embaixo (nos checkboxes), pra não duplicar a pergunta
@@ -1095,6 +1114,8 @@ document.addEventListener("DOMContentLoaded", function () {
         categoriaEmEdicaoNomeAntigo = opcaoSelecionada.value;
 
         campoNovoNomeCategoria.value = categoriaEmEdicaoNomeAntigo;
+        const categoriaAtualLocal = categoriasCustomizadas[tipoSelecionado].find((c) => c.id === categoriaEmEdicaoId);
+        campoRepasseCategoria.checked = !!(categoriaAtualLocal && categoriaAtualLocal.foraDosTotais);
         const limiteExistente = mapaOrcamentos[categoriaEmEdicaoNomeAntigo];
         campoLimiteCategoria.value = limiteExistente ? limiteExistente.toFixed(2).replace(".", ",") : "";
         mensagemAvisoEditarCategoria.classList.remove("visivel");
@@ -1321,8 +1342,16 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             // Atualiza o estado local, sem precisar recarregar a página inteira
+            await updateDoc(doc(db, "usuarios", uidAtual, "categorias", categoriaEmEdicaoId), {
+                foraDosTotais: !!campoRepasseCategoria.checked
+            });
+
             const categoriaLocal = categoriasCustomizadas[tipoSelecionado].find((c) => c.id === categoriaEmEdicaoId);
-            if (categoriaLocal) categoriaLocal.nome = novoNome;
+            if (categoriaLocal) {
+                categoriaLocal.nome = novoNome;
+                categoriaLocal.foraDosTotais = !!campoRepasseCategoria.checked;
+            }
+            refazerTotaisEGrafico();
 
             popularSelectCategorias();
             campoCategoria.value = novoNome;
@@ -1502,6 +1531,7 @@ document.addEventListener("DOMContentLoaded", function () {
             guardar: "← Guardar (trocar)"
         };
         botaoTrocarTipo.textContent = rotulosBotaoTrocar[tipoClicado];
+        botaoTrocarTipo.dataset.tipo = tipoClicado;
         rotuloValor.textContent = "Valor";
         opcoesEspeciaisGasto.hidden = tipoClicado !== "gasto";
 
@@ -1864,9 +1894,10 @@ document.addEventListener("DOMContentLoaded", function () {
                     const referenciaCategoria = await addDoc(collection(db, "usuarios", uidAtual, "categorias"), {
                         nome: categoriaFinal,
                         tipo: tipoSelecionado,
-                        diaVencimento: vencimentoNovaCategoria
+                        diaVencimento: vencimentoNovaCategoria,
+                        foraDosTotais: !!campoRepasseNovaCategoria.checked
                     });
-                    categoriasCustomizadas[tipoSelecionado].push({ nome: categoriaFinal, id: referenciaCategoria.id });
+                    categoriasCustomizadas[tipoSelecionado].push({ nome: categoriaFinal, id: referenciaCategoria.id, foraDosTotais: !!campoRepasseNovaCategoria.checked });
                 }
 
                 if (modoGuardar && campoCategoria.value === "__nova__") {
@@ -1993,9 +2024,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 const referenciaCategoria = await addDoc(collection(db, "usuarios", uidAtual, "categorias"), {
                     nome: categoriaFinal,
                     tipo: tipoSelecionado,
-                    diaVencimento: vencimentoNovaCategoria
+                    diaVencimento: vencimentoNovaCategoria,
+                    foraDosTotais: !!campoRepasseNovaCategoria.checked
                 });
-                categoriasCustomizadas[tipoSelecionado].push({ nome: categoriaFinal, id: referenciaCategoria.id });
+                categoriasCustomizadas[tipoSelecionado].push({ nome: categoriaFinal, id: referenciaCategoria.id, foraDosTotais: !!campoRepasseNovaCategoria.checked });
             }
 
             if (modoGuardar && campoCategoria.value === "__nova__") {
@@ -2974,6 +3006,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (dados.valor > 0) total += dados.valor;
                 return;
             }
+            if (ehForaDosTotais(dados.categoria)) return;
             if (dados.tipo === "gasto") total += dados.valor;
         });
 
@@ -3418,9 +3451,19 @@ document.addEventListener("DOMContentLoaded", function () {
     function calcularTotais(documentos) {
         let totalGanhos = 0;
         let totalGastos = 0;
+        let totalRepasses = 0;
+        let temRepasses = false;
 
         documentos.forEach((documento) => {
             const dados = documento.data();
+
+            // Repasse/acerto: fica de fora de Ganhos e Gastos, mas conta
+            // no saldo do mês (o dinheiro realmente passou pela conta)
+            if (ehForaDosTotais(dados.categoria)) {
+                temRepasses = true;
+                totalRepasses += dados.tipo === "ganho" ? dados.valor : -dados.valor;
+                return;
+            }
 
             // "Guardar Dinheiro" tem uma regra própria, pra fechar a conta certinho:
             // - Depósito (valor positivo): reduz o saldo, como se fosse um gasto —
@@ -3443,7 +3486,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
         totalGanhosEl.textContent = formatarMoeda(totalGanhos);
         totalGastosEl.textContent = formatarMoeda(totalGastos);
-        saldoAtualDoMes = totalGanhos - totalGastos;
+        const itemRepasses = document.getElementById("item-repasses");
+        if (itemRepasses) {
+            itemRepasses.hidden = !temRepasses;
+            document.getElementById("total-repasses").textContent = formatarMoeda(totalRepasses);
+        }
+        saldoAtualDoMes = totalGanhos - totalGastos + totalRepasses;
         atualizarNumeroGrandeDoSaldo();
 
         totalGastosAtual = totalGastos;
@@ -3497,6 +3545,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const dados = documento.data();
 
             if (dados.categoria === "Fatura do Cartão") return;
+            if (ehForaDosTotais(dados.categoria)) return;
 
             // Dinheiro guardado entra como uma fatia própria do gráfico, pra
             // mostrar o quanto foi poupado ao lado do que foi gasto

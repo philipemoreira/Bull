@@ -1111,13 +1111,112 @@ body {
     display: none;
 }
 
-.opcoes-especiais-gasto .item-checkbox {
+/* Cartão "Repetir ou parcelar": cada opção é uma linha com interruptor */
+.opcoes-especiais-gasto {
     background-color: var(--surface-alta);
     border: 1px solid var(--borda);
-    border-radius: 8px;
-    padding: 12px 14px;
-    font-size: 13.5px;
+    border-radius: 12px;
+    padding: 14px 16px 4px;
+    gap: 0;
 }
+
+.titulo-opcoes-gasto {
+    margin: 0 0 6px 0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.opcao-especial {
+    padding: 10px 0;
+    border-top: 1px solid var(--borda);
+}
+
+.opcao-especial:first-of-type {
+    border-top: 0;
+}
+
+.opcao-switch {
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.opcao-textos {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.opcao-titulo {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.opcao-sub {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+/* Interruptor (no lugar da caixinha quadrada) */
+.opcao-switch input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 42px;
+    height: 24px;
+    border-radius: 999px;
+    background-color: var(--borda);
+    position: relative;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.opcao-switch input[type="checkbox"]::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background-color: var(--text-primary);
+    transition: transform 0.2s ease;
+}
+
+.opcao-switch input[type="checkbox"]:checked {
+    background-color: var(--accent);
+}
+
+.opcao-switch input[type="checkbox"]:checked::after {
+    transform: translateX(18px);
+    background-color: var(--sobre-acento);
+}
+
+/* Campos que a opção marcada precisa (parcelas, vencimento, chave) */
+.opcao-detalhe .campo {
+    margin: 12px 0 2px;
+}
+
+.opcao-detalhe .preview-parcela {
+    margin-top: 8px;
+}
+
+/* Selo do tipo escolhido (Gasto / Extra / Guardar) no topo do formulário */
+.botao-trocar-tipo {
+    padding: 7px 14px;
+    border: 1px solid var(--borda);
+    border-radius: 999px;
+    background-color: var(--surface-alta);
+}
+
+.botao-trocar-tipo[data-tipo="gasto"] { color: var(--gasto-cor); border-color: var(--gasto-cor); }
+.botao-trocar-tipo[data-tipo="extra"] { color: var(--sucesso); border-color: var(--sucesso); }
+.botao-trocar-tipo[data-tipo="guardar"] { color: #60A5FA; border-color: #60A5FA; }
 
 /* ==========================================================================
    RESPONSIVIDADE — CELULAR
@@ -1958,4 +2057,30 @@ html.privacidade-ativa .botao-privacidade {
 .cfg-perigo .cfg-sub { color: var(--text-muted); }
 @media (min-width: 700px) {
     .cfg-pagina { max-width: 560px; margin: 0 auto; width: 100%; }
+}
+
+
+/* Repasses / acertos — dinheiro que passa pelo banco mas não é ganho nem gasto */
+.valor-item-repasse {
+    color: var(--text-muted);
+}
+
+.linha-repasse {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin: 4px 0 14px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.linha-repasse[hidden] {
+    display: none;
+}
+
+.linha-repasse input {
+    margin-top: 2px;
+    flex-shrink: 0;
 }

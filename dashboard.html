@@ -109,6 +109,10 @@
                         <span class="rotulo-item-resumo">Gastos</span>
                         <span class="valor-item-resumo valor-item-gasto" id="total-gastos">R$ 0,00</span>
                     </div>
+                    <div class="item-resumo-saldo" id="item-repasses" hidden>
+                        <span class="rotulo-item-resumo">Repasses</span>
+                        <span class="valor-item-resumo valor-item-repasse" id="total-repasses">R$ 0,00</span>
+                    </div>
                 </div>
             </section>
 
@@ -256,12 +260,6 @@
                     <p class="dica-campo" style="margin-top: 6px;">Não desconta o saldo agora — entra na fatura do mês que vem, no vencimento que você já cadastrou nesse cartão.</p>
                 </div>
 
-                <div class="campo" id="campo-parcelas-wrapper" hidden>
-                    <label for="campo-parcelas">Número de parcelas</label>
-                    <input type="number" id="campo-parcelas" min="2" max="48" step="1" placeholder="Ex: 5">
-                    <p class="preview-parcela" id="preview-parcela" hidden></p>
-                </div>
-
                 <div class="campo" id="campo-categoria-wrapper">
                     <label for="campo-categoria" id="rotulo-categoria">Categoria</label>
                     <div class="categoria-com-lixeira">
@@ -283,6 +281,11 @@
                     <label for="campo-nova-categoria" id="rotulo-nova-categoria">Nome da nova categoria</label>
                     <input type="text" id="campo-nova-categoria" placeholder="Ex: Pet, Academia...">
                 </div>
+
+                <label class="linha-repasse" id="linha-repasse-nova-categoria" hidden>
+                    <input type="checkbox" id="campo-repasse-nova-categoria">
+                    <span>Repasse ou acerto: entra no saldo do banco, mas não conta nos ganhos/gastos nem no gráfico</span>
+                </label>
 
                 <div class="campo" id="campo-vencimento-nova-categoria-wrapper" hidden>
                     <label for="campo-vencimento-nova-categoria">Dia de vencimento <span class="dica-campo">(opcional, pra gasto fixo/parcelado)</span></label>
@@ -314,20 +317,39 @@
                     </div>
                 </div>
 
+                <!-- Repetir ou parcelar — só em Gasto. Cada opção é um "interruptor";
+                     os campos que ela precisa (parcelas, vencimento) aparecem
+                     logo embaixo dela, dentro do mesmo cartão -->
                 <div class="opcoes-especiais-gasto" id="opcoes-especiais-gasto">
-                    <div>
-                        <label class="item-checkbox">
+                    <h4 class="titulo-opcoes-gasto">Repetir ou parcelar</h4>
+
+                    <div class="opcao-especial">
+                        <label class="item-checkbox opcao-switch">
+                            <span class="opcao-textos">
+                                <span class="opcao-titulo">Gasto fixo</span>
+                                <span class="opcao-sub">Repete todo mês, pelos próximos 12 meses</span>
+                            </span>
                             <input type="checkbox" id="campo-fixo">
-                            Gasto fixo (cria pendência nos próximos 12 meses)
                         </label>
-                        <div id="slot-vencimento-fixo"></div>
+                        <div class="opcao-detalhe" id="slot-vencimento-fixo"></div>
                     </div>
-                    <div>
-                        <label class="item-checkbox">
+
+                    <div class="opcao-especial">
+                        <label class="item-checkbox opcao-switch">
+                            <span class="opcao-textos">
+                                <span class="opcao-titulo">Parcelar essa compra</span>
+                                <span class="opcao-sub">Divide o valor em parcelas mensais</span>
+                            </span>
                             <input type="checkbox" id="campo-parcelado">
-                            Parcelar essa compra
                         </label>
-                        <div id="slot-vencimento-parcelado"></div>
+                        <div class="opcao-detalhe">
+                            <div class="campo" id="campo-parcelas-wrapper" hidden>
+                                <label for="campo-parcelas">Número de parcelas</label>
+                                <input type="number" id="campo-parcelas" min="2" max="48" step="1" placeholder="Ex: 5">
+                                <p class="preview-parcela" id="preview-parcela" hidden></p>
+                            </div>
+                            <div id="slot-vencimento-parcelado"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -373,6 +395,11 @@
                     Isso também atualiza o vencimento de todas as pendências não pagas dessa categoria — não precisa apagar e recriar.
                 </p>
             </div>
+
+            <label class="linha-repasse">
+                <input type="checkbox" id="campo-repasse-categoria">
+                <span>Repasse ou acerto: entra no saldo do banco, mas não conta nos ganhos/gastos nem no gráfico</span>
+            </label>
 
             <p class="texto-explicativo-guardado" style="margin-bottom: 16px;">
                 Ao trocar o nome, todos os lançamentos antigos dessa categoria são atualizados também, pra manter tudo consistente no extrato.
