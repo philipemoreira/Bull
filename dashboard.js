@@ -1,6 +1,7 @@
 import { calcularSaldoBanco } from "./saldoBanco.js";
 import { formatarMoeda, paraNumero, aplicarMascaraValor, mesReferenciaString, dataDeFechamento, faturaJaFechou } from "./util.js";
 import { escaparHtml } from "./texto.js";
+import { reajustarParcelas } from "./parcelas.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -1153,6 +1154,10 @@ document.addEventListener("DOMContentLoaded", function () {
             campoMesclar.appendChild(opcao);
         });
         document.getElementById("campo-mesclar-categoria-wrapper").hidden = outras.length === 0;
+        document.getElementById("botao-mesclar-categoria").style.display = "none";
+        campoMesclar.onchange = () => {
+            document.getElementById("botao-mesclar-categoria").style.display = campoMesclar.value ? "" : "none";
+        };
 
         fundoModalEditarCategoria.classList.add("aberto");
     });
@@ -2853,6 +2858,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
             await deleteDoc(doc(db, "usuarios", uidAtual, "pendencias", id));
         }
+        if (dados.origem === "parcelado") await reajustarParcelas(uidAtual, dados.grupoId);
 
         botaoConfirmarExclusaoFinal.disabled = false;
         fecharModalExcluirPendencia();
