@@ -2,6 +2,7 @@ import { calcularSaldoBanco } from "./saldoBanco.js";
 import { formatarMoeda, paraNumero, aplicarMascaraValor, mesReferenciaString, dataDeFechamento, faturaJaFechou } from "./util.js";
 import { escaparHtml } from "./texto.js";
 import { reajustarParcelas } from "./parcelas.js";
+import { excluirOutraParte } from "./divisao.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -361,6 +362,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 await deleteDoc(doc(db, "usuarios", uidAtual, "lancamentos", dadosItem.lancamentoId)).catch(() => {});
             }
             await deleteDoc(referenciaItem);
+            if (dadosItem.divisaoId) await excluirOutraParte(uidAtual, "pendencias", dadosItem.divisaoId, botao.dataset.id, confirmarComTelinha);
         }
         if (dadosItem.origem === "parcelado") await reajustarParcelas(uidAtual, dadosItem.grupoId);
 

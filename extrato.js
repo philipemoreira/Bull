@@ -1,5 +1,6 @@
 import { formatarMoeda, paraNumero } from "./util.js";
 import { escaparHtml } from "./texto.js";
+import { excluirOutraParte } from "./divisao.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -315,6 +316,10 @@ document.addEventListener("DOMContentLoaded", function () {
         const dadosParaDesfazer = itemPai && itemPai._dadosOriginais ? { ...itemPai._dadosOriginais } : null;
 
         await deleteDoc(doc(db, "usuarios", uidAtual, "lancamentos", botao.dataset.id));
+        if (dadosParaDesfazer && dadosParaDesfazer.divisaoId) {
+            const apagouOutra = await excluirOutraParte(uidAtual, "lancamentos", dadosParaDesfazer.divisaoId, botao.dataset.id, confirmarComTelinha);
+            if (apagouOutra) return;
+        }
 
         if (dadosParaDesfazer) {
             mostrarToastComAcao("Lançamento excluído.", "Desfazer", async () => {

@@ -353,6 +353,29 @@
                     </div>
                 </div>
 
+                <div class="opcoes-especiais-gasto" id="opcao-dividir-repasse" style="display:none">
+                    <div class="opcao-especial">
+                        <label class="item-checkbox opcao-switch">
+                            <span class="opcao-textos">
+                                <span class="opcao-titulo">Dividir com repasse</span>
+                                <span class="opcao-sub">Parte desse valor é de outra pessoa (ex: da minha mãe)</span>
+                            </span>
+                            <input type="checkbox" id="campo-dividir">
+                        </label>
+                        <div class="opcao-detalhe" id="detalhe-dividir" style="display:none">
+                            <div class="campo">
+                                <label for="campo-valor-repasse">Quanto é a parte de repasse?</label>
+                                <input type="text" inputmode="decimal" id="campo-valor-repasse" placeholder="0,00">
+                            </div>
+                            <div class="campo">
+                                <label for="campo-categoria-repasse">Categoria do repasse</label>
+                                <select id="campo-categoria-repasse"></select>
+                            </div>
+                            <p class="preview-parcela" id="preview-dividir"></p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="campo" id="campo-vencimento-lancamento-wrapper" hidden>
                     <label for="campo-vencimento-lancamento">Dia de vencimento <span class="dica-campo">(todo mês — diferente da Data acima)</span></label>
                     <input type="number" id="campo-vencimento-lancamento" min="1" max="31" placeholder="Ex: 26">

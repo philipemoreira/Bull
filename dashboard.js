@@ -2,6 +2,7 @@ import { calcularSaldoBanco } from "./saldoBanco.js";
 import { formatarMoeda, paraNumero, aplicarMascaraValor, mesReferenciaString, dataDeFechamento, faturaJaFechou } from "./util.js";
 import { escaparHtml } from "./texto.js";
 import { reajustarParcelas } from "./parcelas.js";
+import { excluirOutraParte } from "./divisao.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -1408,6 +1409,8 @@ document.addEventListener("DOMContentLoaded", function () {
         campoParcelado.checked = false;
         campoParcelado.disabled = false;
         previewParcela.hidden = true;
+        campoDividir.checked = false;
+        campoValorRepasse.value = "";
 
         perguntaEscolha.textContent = primeiroNome
             ? `${primeiroNome}, deseja registrar um:`
@@ -1439,6 +1442,8 @@ document.addEventListener("DOMContentLoaded", function () {
         botaoTrocarTipo.hidden = true; // não dá pra trocar o tipo de um lançamento já existente
         rotuloValor.textContent = "Valor";
         opcoesEspeciaisGasto.hidden = true; // editar não deve gerar novas parcelas/repetições
+        blocoDividir.style.display = "none";
+        campoDividir.checked = false;
         campoCategoriaWrapper.hidden = false;
         campoCategoria.required = true;
         campoNovaCategoriaWrapper.hidden = true;
@@ -1539,6 +1544,7 @@ document.addEventListener("DOMContentLoaded", function () {
         botaoTrocarTipo.dataset.tipo = tipoClicado;
         rotuloValor.textContent = "Valor";
         opcoesEspeciaisGasto.hidden = tipoClicado !== "gasto";
+        atualizarVisibilidadeDividir();
 
         // Forma de pagamento só existe em Gasto. Extra não pergunta "forma"
         // (não faz sentido pra quem tá recebendo) — pergunta só "em qual
@@ -1700,7 +1706,62 @@ document.addEventListener("DOMContentLoaded", function () {
         atualizarVisibilidadeParcelas();
     });
 
+    // ---- Dividir com repasse (parte minha + parte de outra pessoa) ----
+    const blocoDividir = document.getElementById("opcao-dividir-repasse");
+    const campoDividir = document.getElementById("campo-dividir");
+    const detalheDividir = document.getElementById("detalhe-dividir");
+    const campoValorRepasse = document.getElementById("campo-valor-repasse");
+    const campoCategoriaRepasse = document.getElementById("campo-categoria-repasse");
+    const previewDividir = document.getElementById("preview-dividir");
+    aplicarMascaraValor(campoValorRepasse);
+
+    function atualizarVisibilidadeDividir() {
+        const pode = tipoSelecionado === "gasto" && !modoGuardar && !idEmEdicao
+            && !campoFixo.checked && !campoParcelado.checked;
+        blocoDividir.style.display = pode ? "" : "none";
+        if (!pode) campoDividir.checked = false;
+
+        const repasses = categoriasCustomizadas.gasto.filter((c) => c.foraDosTotais).map((c) => c.nome);
+        const escolhida = campoCategoriaRepasse.value;
+        campoCategoriaRepasse.innerHTML = "";
+        if (repasses.length === 0) {
+            const op = document.createElement("option");
+            op.value = "";
+            op.textContent = "Nenhuma categoria de Gasto marcada como repasse";
+            campoCategoriaRepasse.appendChild(op);
+        } else {
+            repasses.forEach((nome) => {
+                const op = document.createElement("option");
+                op.value = nome;
+                op.textContent = nome;
+                campoCategoriaRepasse.appendChild(op);
+            });
+            if (repasses.includes(escolhida)) campoCategoriaRepasse.value = escolhida;
+        }
+        detalheDividir.style.display = (pode && campoDividir.checked) ? "" : "none";
+        atualizarPreviewDividir();
+    }
+
+    function atualizarPreviewDividir() {
+        const total = paraNumero(campoValor.value);
+        const repasse = paraNumero(campoValorRepasse.value);
+        if (!campoDividir.checked || !total || !repasse || repasse >= total) {
+            previewDividir.textContent = campoDividir.checked && campoCategoriaRepasse.value === ""
+                ? "Crie antes uma categoria de Gasto e marque \"Repasse ou acerto\"."
+                : "";
+            return;
+        }
+        const minha = Math.round((total - repasse) * 100) / 100;
+        previewDividir.textContent = `Seu gasto: ${formatarMoeda(minha)} · Repasse: ${formatarMoeda(repasse)}`;
+    }
+
+    campoDividir.addEventListener("change", atualizarVisibilidadeDividir);
+    campoValorRepasse.addEventListener("input", atualizarPreviewDividir);
+    campoValor.addEventListener("input", atualizarPreviewDividir);
+    campoCategoriaRepasse.addEventListener("change", atualizarPreviewDividir);
+
     function atualizarVisibilidadeParcelas() {
+        atualizarVisibilidadeDividir();
         const parcelando = campoParcelado.checked;
         campoParcelasWrapper.hidden = !parcelando;
         campoParcelas.required = parcelando;
@@ -1958,6 +2019,27 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        // Divisão com repasse: confere os valores antes de qualquer coisa
+        const dividindo = campoDividir.checked && blocoDividir.style.display !== "none";
+        let valorRepasse = 0;
+        let valorMeu = valorDigitado;
+        let categoriaRepasse = "";
+        let divisaoId = null;
+        if (dividindo) {
+            valorRepasse = paraNumero(campoValorRepasse.value);
+            categoriaRepasse = campoCategoriaRepasse.value;
+            if (!categoriaRepasse) {
+                mostrarAviso("Pra dividir, crie antes uma categoria de Gasto marcada como \"Repasse ou acerto\".");
+                return;
+            }
+            if (!valorRepasse || valorRepasse <= 0 || Math.round(valorRepasse * 100) >= Math.round(valorDigitado * 100)) {
+                mostrarAviso("A parte de repasse precisa ser maior que zero e menor que o valor total.");
+                return;
+            }
+            valorMeu = Math.round((valorDigitado - valorRepasse) * 100) / 100;
+            divisaoId = `div_${Date.now()}`;
+        }
+
         // Se for Gasto Fixo ou Parcelado, confere se já não existe um parecido
         // (mesma descrição/categoria) — evita duplicar por esquecimento
         if (ehParcelado || campoFixo.checked) {
@@ -2047,7 +2129,10 @@ document.addEventListener("DOMContentLoaded", function () {
             let mesDaFaturaCredito = null;
 
             if (noCartaoCredito) {
-                mesDaFaturaCredito = await salvarNoCartao(valorDigitado, categoriaFinal, descricaoBase, cartaoEscolhidoId, campoFixo.checked, ehParcelado, numeroParcelas);
+                mesDaFaturaCredito = await salvarNoCartao(valorMeu, categoriaFinal, descricaoBase, cartaoEscolhidoId, campoFixo.checked, ehParcelado, numeroParcelas, dividindo ? { divisaoId } : {});
+                if (dividindo) {
+                    await salvarNoCartao(valorRepasse, categoriaRepasse, descricaoBase || categoriaFinal, cartaoEscolhidoId, false, false, 1, { divisaoId });
+                }
             } else if (ehParcelado) {
                 await salvarParcelado(valorDigitado, numeroParcelas, categoriaFinal, descricaoBase, dataEscolhida, parseInt(campoVencimentoLancamento.value, 10), campoFormaPagamento.value, campoBancoPagamento.value, campoChavePix.value.trim());
             } else if (campoFixo.checked) {
@@ -2055,7 +2140,7 @@ document.addEventListener("DOMContentLoaded", function () {
             } else {
                 const dadosLancamento = {
                     tipo: tipoSelecionado,
-                    valor: valorDigitado,
+                    valor: valorMeu,
                     categoria: categoriaFinal,
                     descricao: descricaoBase,
                     data: Timestamp.fromDate(dataEscolhida),
@@ -2084,6 +2169,15 @@ document.addEventListener("DOMContentLoaded", function () {
                     if (!podeSeguir) return;
                 }
 
+                if (dividindo) {
+                    dadosLancamento.divisaoId = divisaoId;
+                    await addDoc(collection(db, "usuarios", uidAtual, "lancamentos"), {
+                        ...dadosLancamento,
+                        valor: valorRepasse,
+                        categoria: categoriaRepasse,
+                        descricao: descricaoBase || categoriaFinal
+                    });
+                }
                 await addDoc(collection(db, "usuarios", uidAtual, "lancamentos"), dadosLancamento);
             }
 
@@ -2116,7 +2210,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // de verdade funciona), usando o dia de vencimento que já está cadastrado
     // no cartão escolhido (não pergunta de novo). Cobre os 3 casos: compra
     // avulsa (uma vez só), fixo (repete 12 meses) e parcelado (N vezes).
-    async function salvarNoCartao(valor, categoria, descricaoBase, cartaoId, ehFixo, ehParcelado, numeroParcelas) {
+    async function salvarNoCartao(valor, categoria, descricaoBase, cartaoId, ehFixo, ehParcelado, numeroParcelas, extra = {}) {
         const cartaoEscolhido = cartoesCustomizados.find((c) => c.id === cartaoId);
         const diaFechamentoCartao = (cartaoEscolhido && cartaoEscolhido.diaFechamento) || 1;
         const diaVencimentoCartao = (cartaoEscolhido && cartaoEscolhido.diaVencimento) || 1;
@@ -2154,7 +2248,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 cartaoId,
                 formaPagamento: "credito",
                 pago: false,
-                criadoEm: serverTimestamp()
+                criadoEm: serverTimestamp(),
+                ...extra
             };
             if (ehParcelado) {
                 dadosPendencia.valorTotalCompra = valor;
@@ -2857,6 +2952,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 await deleteDoc(doc(db, "usuarios", uidAtual, "lancamentos", dados.lancamentoId)).catch(() => {});
             }
             await deleteDoc(doc(db, "usuarios", uidAtual, "pendencias", id));
+            if (dados.divisaoId) await excluirOutraParte(uidAtual, "pendencias", dados.divisaoId, id, confirmarComTelinha);
         }
         if (dados.origem === "parcelado") await reajustarParcelas(uidAtual, dados.grupoId);
 
@@ -3424,6 +3520,10 @@ document.addEventListener("DOMContentLoaded", function () {
             const dadosParaDesfazer = dadosDoItem ? { ...dadosDoItem } : null;
 
             await deleteDoc(doc(db, "usuarios", uidAtual, "lancamentos", botaoExcluir.dataset.id));
+            if (dadosDoItem && dadosDoItem.divisaoId) {
+                const apagouOutra = await excluirOutraParte(uidAtual, "lancamentos", dadosDoItem.divisaoId, botaoExcluir.dataset.id, confirmarComTelinha);
+                if (apagouOutra) { mostrarToast("As duas partes foram excluídas ✓"); return; }
+            }
 
             if (dadosParaDesfazer) {
                 mostrarToastComAcao("Lançamento excluído.", "Desfazer", async () => {
