@@ -55,22 +55,28 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoFecharConfirmar = document.getElementById("botao-fechar-confirmar");
 
     const extratoVazio = document.getElementById("extrato-vazio");
-    const filtroMes = document.getElementById("filtro-mes");
-    const filtroValor = document.getElementById("filtro-valor");
     const filtroTexto = document.getElementById("filtro-texto");
-    const limparFiltroMes = document.getElementById("limpar-filtro-mes");
+    const botaoLimparBusca = document.getElementById("limpar-busca");
+    const rotuloMes = document.getElementById("rotulo-mes");
+    const botaoMesAnterior = document.getElementById("mes-anterior");
+    const botaoMesSeguinte = document.getElementById("mes-seguinte");
+    const resumoBusca = document.getElementById("resumo-busca");
+    const resumoTexto = document.getElementById("resumo-texto");
+    const botaoLimparFiltros = document.getElementById("limpar-filtros");
 
     let uidAtual = null;
     let todosOsLancamentos = []; // guarda tudo que veio do Firestore, sem filtro
     let docsComprasCartao = []; // compras no crédito (pendências com noCartao = true)
     let nomesCartoes = {}; // { cartaoId: "Nubank" }
+    let categoriasForaDosTotais = new Set(); // categorias de repasse/acerto: não entram no resumo
+    let mesFiltrado = ""; // "AAAA-MM" ou "" (todos os meses)
 
     // Se a pessoa chegou aqui pelo link "Ver extrato completo" da tela inicial,
     // a URL já vem com ?mes=2026-08 — pré-preenche o filtro de mês com isso.
     // Se veio de um clique no gráfico da tela inicial, também vem ?categoria=X
     const parametros = new URLSearchParams(window.location.search);
     const mesDaUrl = parametros.get("mes");
-    if (mesDaUrl) filtroMes.value = mesDaUrl;
+    if (mesDaUrl && /^\d{4}-\d{2}$/.test(mesDaUrl)) mesFiltrado = mesDaUrl;
 
     const categoriaDaUrl = parametros.get("categoria");
     if (categoriaDaUrl) filtroTexto.value = categoriaDaUrl;
@@ -88,7 +94,18 @@ document.addEventListener("DOMContentLoaded", function () {
         uidAtual = usuario.uid;
         escutarTodosOsLancamentos();
         escutarComprasDoCartao();
+        escutarCategoriasDeRepasse();
     });
+
+    // Categorias de repasse/acerto ficam fora do resumo (igual à tela inicial)
+    function escutarCategoriasDeRepasse() {
+        onSnapshot(collection(db, "usuarios", uidAtual, "categorias"), (snapshot) => {
+            categoriasForaDosTotais = new Set(
+                snapshot.docs.filter((d) => d.data().foraDosTotais).map((d) => d.data().nome)
+            );
+            aplicarFiltrosERenderizar();
+        }, () => { /* sem isso, o resumo só inclui os repasses */ });
+    }
 
     // Compras no cartão de crédito também aparecem aqui, na lista — só pra
     // mostrar (ver cartaoNoExtrato.js): não mexem em saldo, que só desce
@@ -130,14 +147,82 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    filtroMes.addEventListener("change", aplicarFiltrosERenderizar);
-    filtroValor.addEventListener("input", aplicarFiltrosERenderizar);
     filtroTexto.addEventListener("input", aplicarFiltrosERenderizar);
 
-    limparFiltroMes.addEventListener("click", () => {
-        filtroMes.value = "";
+    botaoLimparBusca.addEventListener("click", () => {
+        filtroTexto.value = "";
+        filtroTexto.focus();
         aplicarFiltrosERenderizar();
     });
+
+    // --- Mês com setas ---
+    const NOMES_MESES_LONGOS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+    function mesDeHoje() {
+        const hoje = new Date();
+        return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+    }
+
+    function somarMeses(mesTexto, quantidade) {
+        const [ano, mes] = mesTexto.split("-").map(Number);
+        const nova = new Date(ano, mes - 1 + quantidade, 1);
+        return `${nova.getFullYear()}-${String(nova.getMonth() + 1).padStart(2, "0")}`;
+    }
+
+    function desenharRotuloMes() {
+        if (!mesFiltrado) {
+            rotuloMes.textContent = "Todos os meses";
+            rotuloMes.setAttribute("aria-label", "Todos os meses. Toque para ver só o mês atual");
+            return;
+        }
+        const [ano, mes] = mesFiltrado.split("-").map(Number);
+        const nomeMes = NOMES_MESES_LONGOS[mes - 1];
+        rotuloMes.textContent = `${nomeMes.charAt(0).toUpperCase()}${nomeMes.slice(1)} de ${ano}`;
+        rotuloMes.setAttribute("aria-label", "Ver todos os meses");
+    }
+
+    botaoMesAnterior.addEventListener("click", () => {
+        mesFiltrado = somarMeses(mesFiltrado || mesDeHoje(), mesFiltrado ? -1 : 0);
+        aplicarFiltrosERenderizar();
+    });
+    botaoMesSeguinte.addEventListener("click", () => {
+        mesFiltrado = somarMeses(mesFiltrado || mesDeHoje(), mesFiltrado ? 1 : 0);
+        aplicarFiltrosERenderizar();
+    });
+    rotuloMes.addEventListener("click", () => {
+        mesFiltrado = mesFiltrado ? "" : mesDeHoje();
+        aplicarFiltrosERenderizar();
+    });
+
+    botaoLimparFiltros.addEventListener("click", () => {
+        filtroTexto.value = "";
+        mesFiltrado = "";
+        formaPagamentoFiltrada = "";
+        chipsFormaPagamento.forEach((chip) => chip.classList.toggle("ativo", chip.dataset.forma === ""));
+        aplicarFiltrosERenderizar();
+    });
+
+    function desenharResumo(documentos) {
+        const filtrosAtivos = !!(filtroTexto.value.trim() || mesFiltrado || formaPagamentoFiltrada);
+        botaoLimparFiltros.hidden = !filtrosAtivos;
+        botaoLimparBusca.hidden = !filtroTexto.value;
+        resumoBusca.hidden = documentos.length === 0 && !filtrosAtivos;
+
+        let ganhos = 0;
+        let gastos = 0;
+        documentos.forEach((documento) => {
+            const dados = documento.data();
+            if (dados.tipo === "transferencia") return;
+            if (dados.categoria === "Guardar Dinheiro" || dados.categoria === "Retirada da Reserva") return;
+            if (categoriasForaDosTotais.has(dados.categoria)) return;
+            if (dados.tipo === "ganho") ganhos += dados.valor;
+            else if (dados.tipo === "gasto") gastos += dados.valor;
+        });
+        const quantidade = documentos.length;
+        resumoTexto.textContent = quantidade === 0
+            ? "Nada encontrado"
+            : `${quantidade} ${quantidade === 1 ? "lançamento" : "lançamentos"} · Ganhos ${formatarMoeda(ganhos)} · Gastos ${formatarMoeda(gastos)}`;
+    }
 
     function aplicarFiltrosERenderizar() {
         // A "Retirada" (valor negativo em "Guardar Dinheiro") é só um registro
@@ -156,11 +241,13 @@ document.addEventListener("DOMContentLoaded", function () {
             (documento) => !(documento.data().categoria === "Guardar Dinheiro" && documento.data().valor < 0)
         );
 
-        if (formaPagamentoFiltrada) {
+        if (formaPagamentoFiltrada === "transferencia") {
+            filtrados = filtrados.filter((documento) => documento.data().tipo === "transferencia");
+        } else if (formaPagamentoFiltrada) {
             filtrados = filtrados.filter((documento) => documento.data().formaPagamento === formaPagamentoFiltrada);
         }
 
-        if (filtroMes.value) {
+        if (mesFiltrado) {
             filtrados = filtrados.filter((documento) => {
                 const dados = documento.data();
                 // Usa "mesReferencia" quando existe (é o que decide em qual
@@ -169,30 +256,26 @@ document.addEventListener("DOMContentLoaded", function () {
                 // esse campo — pra esses, cai de volta pra olhar a data mesmo
                 const mesDoLancamento = dados.mesReferencia
                     || `${dados.data.toDate().getFullYear()}-${String(dados.data.toDate().getMonth() + 1).padStart(2, "0")}`;
-                return mesDoLancamento === filtroMes.value;
+                return mesDoLancamento === mesFiltrado;
             });
         }
 
-        if (filtroValor.value) {
-            const valorBuscado = paraNumero(filtroValor.value);
-            if (!isNaN(valorBuscado)) {
-                filtrados = filtrados.filter((documento) => {
-                    const valorLancamento = documento.data().valor;
-                    // Compara arredondado a 2 casas, pra bater com o que a pessoa digitou
-                    return Math.round(valorLancamento * 100) === Math.round(valorBuscado * 100);
-                });
-            }
-        }
-
+        // Uma só barra: acha por nome, categoria, banco... e, se o que foi
+        // digitado parece um valor (ex: 50 ou 50,90), também por valor exato
         const textoBuscado = removerAcentos(filtroTexto.value.trim().toLowerCase());
         if (textoBuscado) {
+            const pareceValor = /^(r\$\s*)?\d+([.,]\d{1,2})?$/.test(textoBuscado);
+            const valorBuscado = pareceValor ? paraNumero(textoBuscado.replace(/^r\$\s*/, "")) : NaN;
             filtrados = filtrados.filter((documento) => {
                 const dados = documento.data();
                 const campos = removerAcentos([dados.descricao, dados.categoria, dados.meta, dados.banco, dados.bancoOrigem].filter(Boolean).join(" ").toLowerCase());
-                return campos.includes(textoBuscado);
+                if (campos.includes(textoBuscado)) return true;
+                return !isNaN(valorBuscado) && Math.round(dados.valor * 100) === Math.round(valorBuscado * 100);
             });
         }
 
+        desenharRotuloMes();
+        desenharResumo(filtrados);
         renderizarLista(filtrados);
     }
 

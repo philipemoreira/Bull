@@ -43,35 +43,36 @@
 
         <main class="conteudo-principal">
 
-            <div class="campo-filtro" style="margin-bottom: 14px;">
-                <label for="filtro-texto">Buscar por descrição ou categoria</label>
-                <input type="text" id="filtro-texto" placeholder="Ex: Mercado, Uber, Alimentação...">
-            </div>
-
-            <div class="chips-forma-pagamento" id="chips-forma-pagamento" role="group" aria-label="Filtrar por forma de pagamento">
-                <button type="button" class="chip-forma ativo" data-forma="">Todos</button>
-                <button type="button" class="chip-forma" data-forma="debito">Débito</button>
-                <button type="button" class="chip-forma" data-forma="pix">PIX</button>
-                <button type="button" class="chip-forma" data-forma="credito">Crédito</button>
-                <button type="button" class="chip-forma" data-forma="dinheiro">Dinheiro</button>
-            </div>
-
-            <div class="filtros-extrato">
-                <div class="campo-filtro">
-                    <label for="filtro-mes">Mês</label>
-                    <div class="filtro-mes-wrapper">
-                        <input type="month" id="filtro-mes">
-                        <button type="button" id="limpar-filtro-mes" class="botao-limpar-filtro" title="Ver todos os meses">✕</button>
-                    </div>
+            <div class="painel-busca">
+                <div class="busca-linha">
+                    <svg class="busca-lupa" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                    <input type="search" id="filtro-texto" class="busca-campo" placeholder="Buscar nome, banco ou valor" autocomplete="off" aria-label="Buscar lançamentos">
+                    <button type="button" id="limpar-busca" class="busca-limpar" aria-label="Apagar busca" hidden>✕</button>
                 </div>
-                <div class="campo-filtro">
-                    <label for="filtro-valor">Buscar por valor</label>
-                    <input type="text" inputmode="decimal" id="filtro-valor" step="0.01" placeholder="Ex: 50">
+
+                <div class="seletor-mes" role="group" aria-label="Escolher mês">
+                    <button type="button" class="seta-mes" id="mes-anterior" aria-label="Mês anterior">‹</button>
+                    <button type="button" class="extrato-rotulo-mes" id="rotulo-mes" aria-label="Ver todos os meses">Todos os meses</button>
+                    <button type="button" class="seta-mes" id="mes-seguinte" aria-label="Próximo mês">›</button>
+                </div>
+
+                <div class="chips-forma-pagamento" id="chips-forma-pagamento" role="group" aria-label="Filtrar por tipo de lançamento">
+                    <button type="button" class="chip-forma ativo" data-forma="">Todos</button>
+                    <button type="button" class="chip-forma" data-forma="debito">Débito</button>
+                    <button type="button" class="chip-forma" data-forma="pix">PIX</button>
+                    <button type="button" class="chip-forma" data-forma="credito">Crédito</button>
+                    <button type="button" class="chip-forma" data-forma="dinheiro">Dinheiro</button>
+                    <button type="button" class="chip-forma" data-forma="transferencia">Transferência</button>
+                </div>
+
+                <div class="resumo-busca" id="resumo-busca" hidden>
+                    <span id="resumo-texto"></span>
+                    <button type="button" id="limpar-filtros" class="link-limpar-filtros" hidden>Limpar filtros</button>
                 </div>
             </div>
 
             <ul class="lista-lancamentos" id="lista-extrato"></ul>
-            <p class="lista-vazia" id="extrato-vazio" hidden>Nenhum lançamento encontrado com esse filtro.</p>
+            <p class="lista-vazia" id="extrato-vazio" hidden>Nenhum lançamento encontrado. Tente outro nome, outro mês ou toque em "Limpar filtros".</p>
         </main>
 
         <nav class="nav-inferior" id="nav-inferior">

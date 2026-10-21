@@ -15,11 +15,6 @@
     }
 }
 
-.filtros-extrato {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
-}
 
 .texto-explicativo-guardado {
     color: var(--text-muted);
@@ -281,3 +276,134 @@
     margin-top: 6px;
     padding-right: 2px;
 }
+
+
+/* ==========================================================================
+   Extrato — painel de busca (barra única, mês com setas, filtros em uma linha)
+   ========================================================================== */
+.painel-busca {
+    margin-bottom: 18px;
+}
+
+.busca-linha {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.busca-lupa {
+    position: absolute;
+    left: 14px;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.busca-campo {
+    width: 100%;
+    box-sizing: border-box;
+    background-color: var(--surface-alta);
+    border: 1px solid var(--borda);
+    border-radius: 12px;
+    padding: 13px 40px 13px 42px;
+    font-family: var(--fonte-corpo);
+    font-size: 15px;
+    color: var(--text-primary);
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.busca-campo::-webkit-search-cancel-button { display: none; }
+.busca-campo::placeholder { color: var(--text-muted); }
+.busca-campo:focus { outline: none; border-color: var(--accent); }
+
+.busca-limpar {
+    position: absolute;
+    right: 8px;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.busca-limpar:hover { color: var(--accent); }
+
+.seletor-mes {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.seta-mes {
+    flex-shrink: 0;
+    width: 44px;
+    height: 40px;
+    background-color: var(--surface-alta);
+    border: 1px solid var(--borda);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.seta-mes:hover { border-color: var(--accent); color: var(--accent); }
+
+.extrato-rotulo-mes {
+    flex: 1;
+    height: 40px;
+    background: none;
+    border: none;
+    font-family: var(--fonte-titulo, var(--fonte-corpo));
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+/* Filtros numa linha só, que rola de lado em telas estreitas */
+.painel-busca .chips-forma-pagamento {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-bottom: 10px;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+}
+
+.painel-busca .chips-forma-pagamento::-webkit-scrollbar { display: none; }
+
+.painel-busca .chip-forma {
+    flex-shrink: 0;
+    padding: 7px 14px;
+    font-size: 13px;
+}
+
+.resumo-busca {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.link-limpar-filtros {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font-family: var(--fonte-corpo);
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.link-limpar-filtros:hover { text-decoration: underline; }
