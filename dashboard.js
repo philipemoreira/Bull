@@ -375,6 +375,7 @@ document.addEventListener("DOMContentLoaded", function () {
         await carregarComSeguranca("bancos", carregarBancos);
         await carregarComSeguranca("resumo de bancos", atualizarResumoBancos);
         await carregarComSeguranca("cartões", carregarCartoes);
+        await carregarComSeguranca("edição pedida pelo extrato", abrirEdicaoPedidaPelaUrl);
         // Agora que os cartões (dia de fechamento, nomes) estão carregados,
         // recomeça a escuta pra recalcular o resumo da fatura e o gráfico
         escutarResumoFaturaCartoes();
@@ -753,9 +754,39 @@ document.addEventListener("DOMContentLoaded", function () {
             .some((c) => c.nome === nomeCategoria && c.foraDosTotais);
     }
 
+    // Toque na linha "Repasses": lista o que está somando ali
+    (function ligarDetalheRepasses() {
+        const fundo = document.getElementById("fundo-modal-detalhe-repasses");
+        const lista = document.getElementById("lista-detalhe-repasses");
+        const resumo = document.getElementById("resumo-detalhe-repasses");
+        function abrir() {
+            const itens = (ultimosDocumentosDoMes || [])
+                .map((d) => d.data())
+                .filter((d) => ehForaDosTotais(d.categoria));
+            lista.innerHTML = "";
+            let total = 0;
+            itens.forEach((d) => {
+                const entrada = d.tipo === "ganho";
+                total += entrada ? d.valor : -d.valor;
+                const linha = document.createElement("div");
+                linha.style.cssText = "display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--borda)";
+                linha.innerHTML = `<span>${escaparHtml(d.categoria)}${d.descricao ? " · " + escaparHtml(d.descricao) : ""}<br><small>${entrada ? "Entrou" : "Saiu"}</small></span><strong>${entrada ? "+" : "−"} ${formatarMoeda(d.valor)}</strong>`;
+                lista.appendChild(linha);
+            });
+            resumo.textContent = itens.length === 0
+                ? "Nenhum lançamento de repasse neste mês."
+                : `Entrou − saiu = ${formatarMoeda(total)}. Se um item aqui não era de repasse, a categoria dele está marcada como "Repasse ou acerto".`;
+            fundo.classList.add("aberto");
+        }
+        document.getElementById("item-repasses").addEventListener("click", abrir);
+        document.getElementById("botao-fechar-detalhe-repasses").addEventListener("click", () => fundo.classList.remove("aberto"));
+        fundo.addEventListener("click", (e) => { if (e.target === fundo) fundo.classList.remove("aberto"); });
+    })();
+
     function refazerTotaisEGrafico() {
-        if (!ultimosDocumentosDoMes || ultimosDocumentosDoMes.length === 0) return;
-        calcularTotais(ultimosDocumentosDoMes);
+        if (!ultimosDocumentosDoMes) return;
+        // Mesmo sem lançamentos no mês, o gráfico ainda mostra compras do cartão
+        if (ultimosDocumentosDoMes.length > 0) calcularTotais(ultimosDocumentosDoMes);
         renderizarGrafico(ultimosDocumentosDoMes);
     }
 
@@ -1520,10 +1551,139 @@ document.addEventListener("DOMContentLoaded", function () {
         fundoModal.classList.add("aberto");
     }
 
+    // Veio do Extrato (?editar=ID): depois de salvar ou cancelar, volta pra lá
+    let veioDoExtrato = false;
+
     function fecharModal() {
         fundoModal.classList.remove("aberto");
         botaoTrocarTipo.hidden = false;
+        if (veioDoExtrato) {
+            veioDoExtrato = false;
+            setTimeout(() => { window.location.href = "extrato.html"; }, 700);
+        }
     }
+
+    async function abrirEdicaoPedidaPelaUrl() {
+        const idPedido = new URLSearchParams(window.location.search).get("editar");
+        if (!idPedido) return;
+        // tira o parâmetro da URL, pra não reabrir ao atualizar a página
+        window.history.replaceState({}, "", "dashboard.html");
+        try {
+            const snap = await getDoc(doc(db, "usuarios", uidAtual, "lancamentos", idPedido));
+            if (!snap.exists()) { mostrarToast("Esse lançamento não existe mais."); return; }
+            veioDoExtrato = true;
+            abrirModalEdicao(snap.id, snap.data());
+        } catch (erro) {
+            mostrarToast("Não deu pra abrir esse lançamento agora.");
+        }
+    }
+
+    // ==========================================================================
+    // TRANSFERIR ENTRE BANCOS — um único lançamento (tipo "transferencia"):
+    // sai do banco de origem e entra no de destino
+    // ==========================================================================
+    const fundoModalTransferir = document.getElementById("fundo-modal-transferir");
+    const formularioTransferir = document.getElementById("formulario-transferir");
+    const campoValorTransferir = document.getElementById("campo-valor-transferir");
+    const campoOrigemTransferir = document.getElementById("campo-origem-transferir");
+    const campoDestinoTransferir = document.getElementById("campo-destino-transferir");
+    const campoDescricaoTransferir = document.getElementById("campo-descricao-transferir");
+    const campoDataTransferir = document.getElementById("campo-data-transferir");
+    const avisoTransferir = document.getElementById("mensagem-aviso-transferir");
+    const botaoSalvarTransferir = document.getElementById("botao-salvar-transferir");
+    const dicaSaldoOrigemTransferir = document.getElementById("dica-saldo-origem-transferir");
+    aplicarMascaraValor(campoValorTransferir);
+
+    function avisoDeTransferencia(texto) {
+        avisoTransferir.textContent = texto;
+        avisoTransferir.classList.toggle("visivel", !!texto);
+    }
+
+    async function mostrarSaldoDaOrigem() {
+        dicaSaldoOrigemTransferir.textContent = "";
+        const nome = campoOrigemTransferir.value;
+        const banco = bancosCustomizados.find((b) => b.nome === nome);
+        if (!banco) return;
+        try {
+            const snap = await getDoc(doc(db, "usuarios", uidAtual, "bancos", banco.id));
+            const saldoInicial = snap.exists() ? (snap.data().saldoInicial || 0) : 0;
+            const saldo = await calcularSaldoBancoAgora(nome, saldoInicial);
+            if (campoOrigemTransferir.value === nome) dicaSaldoOrigemTransferir.textContent = `Saldo agora: ${formatarMoeda(saldo)}`;
+        } catch (erro) { /* só não mostra o saldo */ }
+    }
+
+    function abrirModalTransferir() {
+        avisoDeTransferencia("");
+        if (bancosCustomizados.length < 2) {
+            mostrarToast("Cadastre pelo menos 2 bancos em Bancos e Cartões para transferir.", 3600);
+            return;
+        }
+        formularioTransferir.reset();
+        [campoOrigemTransferir, campoDestinoTransferir].forEach((select) => {
+            select.innerHTML = "";
+            bancosCustomizados.forEach((banco) => {
+                const opcao = document.createElement("option");
+                opcao.value = banco.nome;
+                opcao.textContent = banco.nome;
+                select.appendChild(opcao);
+            });
+        });
+        campoDestinoTransferir.selectedIndex = 1;
+        campoDataTransferir.value = formatarDataParaCampo(new Date());
+        fundoModalTransferir.classList.add("aberto");
+        mostrarSaldoDaOrigem();
+        campoValorTransferir.focus();
+    }
+
+    function fecharModalTransferir() {
+        fundoModalTransferir.classList.remove("aberto");
+    }
+
+    campoOrigemTransferir.addEventListener("change", mostrarSaldoDaOrigem);
+    document.getElementById("botao-fechar-transferir").addEventListener("click", fecharModalTransferir);
+    fundoModalTransferir.addEventListener("click", (evento) => {
+        if (evento.target === fundoModalTransferir) fecharModalTransferir();
+    });
+
+    formularioTransferir.addEventListener("submit", async (evento) => {
+        evento.preventDefault();
+        avisoDeTransferencia("");
+        const valor = paraNumero(campoValorTransferir.value);
+        const origem = campoOrigemTransferir.value;
+        const destino = campoDestinoTransferir.value;
+        if (!valor || valor <= 0) { avisoDeTransferencia("Digita um valor maior que zero."); return; }
+        if (!origem || !destino) { avisoDeTransferencia("Escolhe os dois bancos."); return; }
+        if (origem === destino) { avisoDeTransferencia("O banco de origem e o de destino precisam ser diferentes."); return; }
+
+        botaoSalvarTransferir.disabled = true;
+        try {
+            const bancoOrigem = bancosCustomizados.find((b) => b.nome === origem);
+            const snap = bancoOrigem ? await getDoc(doc(db, "usuarios", uidAtual, "bancos", bancoOrigem.id)) : null;
+            const saldoInicial = snap && snap.exists() ? (snap.data().saldoInicial || 0) : 0;
+            const saldoOrigem = await calcularSaldoBancoAgora(origem, saldoInicial);
+            if (Math.round(valor * 100) > Math.round(saldoOrigem * 100)) {
+                avisoDeTransferencia(`O ${origem} só tem ${formatarMoeda(saldoOrigem)}. Não dá para transferir mais do que isso.`);
+                return;
+            }
+            await addDoc(collection(db, "usuarios", uidAtual, "lancamentos"), {
+                tipo: "transferencia",
+                valor,
+                categoria: "Transferência",
+                descricao: campoDescricaoTransferir.value.trim(),
+                banco: destino,
+                bancoOrigem: origem,
+                data: Timestamp.fromDate(construirDataComHorarioReal(campoDataTransferir.value)),
+                mesReferencia: mesReferenciaString(mesSelecionado),
+                criadoEm: serverTimestamp()
+            });
+            fecharModalTransferir();
+            mostrarToast(`Transferido ✓ ${origem} → ${destino}`);
+        } catch (erro) {
+            avisoDeTransferencia("Não deu pra salvar agora. Confere sua internet e tenta de novo.");
+        } finally {
+            botaoSalvarTransferir.disabled = false;
+        }
+    });
 
     function irParaFormulario(tipoClicado) {
         // "guardar" não é um tipo de lançamento de verdade — por baixo dos
@@ -1652,7 +1812,14 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     botoesEscolha.forEach((botao) => {
-        botao.addEventListener("click", () => irParaFormulario(botao.dataset.tipo));
+        botao.addEventListener("click", () => {
+            if (botao.dataset.tipo === "transferir") {
+                fecharModal();
+                abrirModalTransferir();
+                return;
+            }
+            irParaFormulario(botao.dataset.tipo);
+        });
     });
 
     botaoTrocarTipo.addEventListener("click", () => {
@@ -1745,6 +1912,13 @@ document.addEventListener("DOMContentLoaded", function () {
     function atualizarPreviewDividir() {
         const total = paraNumero(campoValor.value);
         const repasse = paraNumero(campoValorRepasse.value);
+        // Aviso na hora: a categoria da SUA parte não pode ser de repasse
+        if (campoDividir.checked && ehForaDosTotais(campoCategoria.value)) {
+            previewDividir.textContent = "⚠️ A categoria do gasto (lá em cima) é de repasse. Escolha uma categoria normal para a SUA parte.";
+            previewDividir.style.color = "var(--gasto-cor, #F87171)";
+            return;
+        }
+        previewDividir.style.color = "";
         if (!campoDividir.checked || !total || !repasse || repasse >= total) {
             previewDividir.textContent = campoDividir.checked && campoCategoriaRepasse.value === ""
                 ? "Crie antes uma categoria de Gasto e marque \"Repasse ou acerto\"."
@@ -1759,6 +1933,7 @@ document.addEventListener("DOMContentLoaded", function () {
     campoValorRepasse.addEventListener("input", atualizarPreviewDividir);
     campoValor.addEventListener("input", atualizarPreviewDividir);
     campoCategoriaRepasse.addEventListener("change", atualizarPreviewDividir);
+    campoCategoria.addEventListener("change", atualizarPreviewDividir);
 
     function atualizarVisibilidadeParcelas() {
         atualizarVisibilidadeDividir();
@@ -2034,6 +2209,10 @@ document.addEventListener("DOMContentLoaded", function () {
             }
             if (!valorRepasse || valorRepasse <= 0 || Math.round(valorRepasse * 100) >= Math.round(valorDigitado * 100)) {
                 mostrarAviso("A parte de repasse precisa ser maior que zero e menor que o valor total.");
+                return;
+            }
+            if (ehForaDosTotais(categoriaFinal)) {
+                mostrarAviso("A categoria do gasto está marcada como \"Repasse ou acerto\". Escolha para a SUA parte uma categoria normal (a de repasse é só para a parte da sua mãe).");
                 return;
             }
             valorMeu = Math.round((valorDigitado - valorRepasse) * 100) / 100;
@@ -3427,7 +3606,8 @@ document.addEventListener("DOMContentLoaded", function () {
             const dataObj = dados.data.toDate();
             const dataFormatada = dataObj.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
             const horaFormatada = dataObj.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", hour12: false });
-            const sinal = dados.tipo === "ganho" ? "+" : "-";
+            const ehTransferencia = dados.tipo === "transferencia";
+            const sinal = ehTransferencia ? "⇄" : (dados.tipo === "ganho" ? "+" : "-");
 
             const item = document.createElement("li");
             item.className = `item-lancamento tipo-${dados.tipo}${dados.categoria === "Guardar Dinheiro" ? " tipo-cofre" : ""}`;
@@ -3442,9 +3622,12 @@ document.addEventListener("DOMContentLoaded", function () {
             const ehCofrinho = dados.categoria === "Guardar Dinheiro";
             const tituloGrande = ehCofrinho
                 ? (dados.meta || "Guardado")
-                : (dados.descricao || dados.categoria);
+                : (ehTransferencia ? (dados.descricao || "Transferência") : (dados.descricao || dados.categoria));
+            const textoMetaItem = ehTransferencia
+                ? `${dados.bancoOrigem || "?"} → ${dados.banco || "?"}`
+                : dados.categoria;
 
-            const botaoDuplicarHtml = ehCofrinho ? "" : `
+            const botaoDuplicarHtml = (ehCofrinho || ehTransferencia) ? "" : `
                 <button class="botao-duplicar" data-id="${documento.id}" aria-label="Duplicar lançamento">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="9" y="9" width="13" height="13" rx="2"/>
@@ -3457,7 +3640,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <span class="ponto-categoria"></span>
                 <div class="info-lancamento">
                     <div class="descricao-lancamento">${escaparHtml(tituloGrande)}</div>
-                    <div class="meta-lancamento">${escaparHtml(dados.categoria)} · ${dataFormatada} às ${horaFormatada}</div>
+                    <div class="meta-lancamento">${escaparHtml(textoMetaItem)} · ${dataFormatada} às ${horaFormatada}</div>
                 </div>
                 <span class="valor-lancamento">${sinal} ${formatarMoeda(dados.valor)}</span>
                 ${botaoDuplicarHtml}
@@ -3547,6 +3730,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 window.alert("Esse lançamento faz parte do seu Saldo Guardado e não pode ser editado por aqui.");
                 return;
             }
+            if (item._dadosOriginais.tipo === "transferencia") {
+                mostrarToast("Transferência não edita. Exclua e faça de novo.", 3200);
+                return;
+            }
             abrirModalEdicao(item.dataset.id, item._dadosOriginais);
         }
     });
@@ -3562,6 +3749,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         documentos.forEach((documento) => {
             const dados = documento.data();
+
+            // Transferência entre bancos: o dinheiro só mudou de lugar
+            if (dados.tipo === "transferencia") return;
 
             // Repasse/acerto: fica de fora de Ganhos e Gastos, mas conta
             // no saldo do mês (o dinheiro realmente passou pela conta)

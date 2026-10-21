@@ -208,7 +208,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (textoBuscado) {
             filtrados = filtrados.filter((documento) => {
                 const dados = documento.data();
-                const campos = removerAcentos([dados.descricao, dados.categoria, dados.meta].filter(Boolean).join(" ").toLowerCase());
+                const campos = removerAcentos([dados.descricao, dados.categoria, dados.meta, dados.banco, dados.bancoOrigem].filter(Boolean).join(" ").toLowerCase());
                 return campos.includes(textoBuscado);
             });
         }
@@ -228,11 +228,15 @@ document.addEventListener("DOMContentLoaded", function () {
             const dataObj = dados.data.toDate();
             const dataFormatada = dataObj.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
             const horaFormatada = dataObj.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", hour12: false });
-            const sinal = dados.tipo === "ganho" ? "+" : "-";
+            const ehTransferencia = dados.tipo === "transferencia";
+            const sinal = ehTransferencia ? "⇄" : (dados.tipo === "ganho" ? "+" : "-");
 
             const item = document.createElement("li");
             item.className = `item-lancamento tipo-${dados.tipo}${dados.categoria === "Guardar Dinheiro" ? " tipo-cofre" : ""}`;
             item._dadosOriginais = dados;
+            item._idDoc = documento.id;
+            const editavel = !ehTransferencia && !dados.ehItemCartao && dados.categoria !== "Guardar Dinheiro" && dados.categoria !== "Retirada da Reserva";
+            if (editavel) item.style.cursor = "pointer";
             if (dados.tipo === "gasto") {
                 item.style.setProperty("--cor-categoria-item", corDaCategoria(dados.categoria));
             }
@@ -240,14 +244,17 @@ document.addEventListener("DOMContentLoaded", function () {
             const ehCofrinho = dados.categoria === "Guardar Dinheiro";
             const tituloGrande = ehCofrinho
                 ? (dados.meta || "Guardado")
-                : (dados.descricao || dados.categoria);
+                : (ehTransferencia ? (dados.descricao || "Transferência") : (dados.descricao || dados.categoria));
+            const textoMetaItem = ehTransferencia
+                ? `${dados.bancoOrigem || "?"} → ${dados.banco || "?"}`
+                : dados.categoria;
 
             // Forma de pagamento e banco — só pros lançamentos normais
             // (Gasto/Extra), o cofrinho já mostra o banco dele de outro
             // jeito, não precisa duplicar aqui
             const nomesFormaPagamento = { dinheiro: "Dinheiro", pix: "PIX", debito: "Débito", credito: "Crédito" };
             let textoFormaPagamento = "";
-            if (!ehCofrinho) {
+            if (!ehCofrinho && !ehTransferencia) {
                 if (dados.formaPagamento) {
                     textoFormaPagamento += ` · ${nomesFormaPagamento[dados.formaPagamento] || dados.formaPagamento}`;
                 }
@@ -260,7 +267,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <span class="ponto-categoria"></span>
                 <div class="info-lancamento">
                     <div class="descricao-lancamento">${escaparHtml(tituloGrande)}</div>
-                    <div class="meta-lancamento">${escaparHtml(dados.categoria)} · ${dataFormatada} às ${horaFormatada}${textoFormaPagamento}</div>
+                    <div class="meta-lancamento">${escaparHtml(textoMetaItem)} · ${dataFormatada} às ${horaFormatada}${textoFormaPagamento}</div>
                 </div>
                 <span class="valor-lancamento">${sinal} ${formatarMoeda(dados.valor)}</span>
                 <button class="botao-excluir" data-id="${documento.id}" data-categoria="${escaparHtml(dados.categoria)}" data-item-cartao="${dados.ehItemCartao ? "1" : ""}" aria-label="Excluir lançamento">
@@ -291,7 +298,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
     listaExtrato.addEventListener("click", async (evento) => {
         const botao = evento.target.closest(".botao-excluir");
-        if (!botao) return;
+        if (!botao) {
+            // Toque no item (fora da lixeira): abre a edição na tela inicial
+            const itemTocado = evento.target.closest(".item-lancamento");
+            if (!itemTocado || !itemTocado._dadosOriginais) return;
+            const d = itemTocado._dadosOriginais;
+            if (d.tipo === "transferencia") {
+                await confirmarComTelinha("Transferência não pode ser editada. Para corrigir, exclua e faça de novo.", "Transferência");
+                return;
+            }
+            if (d.ehItemCartao) {
+                await confirmarComTelinha("Essa é uma compra no cartão de crédito. Para editar, vai em Bancos e Cartões.", "Compra no cartão");
+                return;
+            }
+            if (d.categoria === "Guardar Dinheiro" || d.categoria === "Retirada da Reserva") {
+                await confirmarComTelinha("Esse lançamento faz parte do Saldo Guardado. Para ajustar, vai na aba Guardado.", "Saldo Guardado");
+                return;
+            }
+            window.location.href = `dashboard.html?editar=${encodeURIComponent(itemTocado._idDoc)}`;
+            return;
+        }
 
         // Compra no cartão de crédito: quem gerencia (e exclui) é a tela
         // Bancos e Cartões — aqui é só consulta

@@ -42,6 +42,12 @@ document.addEventListener("DOMContentLoaded", function () {
     const totalGuardadoEl = document.getElementById("total-guardado");
     const listaGuardado = document.getElementById("lista-guardado");
     const guardadoVazio = document.getElementById("guardado-vazio");
+    const listaGuardadoCompleta = document.getElementById("lista-guardado-completa");
+    const botaoVerTudoGuardado = document.getElementById("botao-ver-tudo-guardado");
+    const fundoModalHistorico = document.getElementById("fundo-modal-historico");
+    botaoVerTudoGuardado.addEventListener("click", () => fundoModalHistorico.classList.add("aberto"));
+    document.getElementById("botao-fechar-historico").addEventListener("click", () => fundoModalHistorico.classList.remove("aberto"));
+    fundoModalHistorico.addEventListener("click", (e) => { if (e.target === fundoModalHistorico) fundoModalHistorico.classList.remove("aberto"); });
 
     const listaMetas = document.getElementById("lista-metas");
     const metasVazio = document.getElementById("metas-vazio");
@@ -137,24 +143,9 @@ document.addEventListener("DOMContentLoaded", function () {
     // ==========================================================================
     // HISTÓRICO E TOTAL GERAL (igual antes)
     // ==========================================================================
-    function escutarGuardado() {
-        const referencia = collection(db, "usuarios", uidAtual, "lancamentos");
-        // Sem orderBy aqui de propósito: um "where" sozinho não precisa de
-        // índice composto no Firestore. Ordenamos do lado do app mesmo.
-        const consulta = query(referencia, where("categoria", "==", "Guardar Dinheiro"));
-
-        onSnapshot(consulta, (snapshot) => {
-            let total = 0;
-            listaGuardado.innerHTML = "";
-            guardadoVazio.hidden = snapshot.docs.length > 0;
-
-            const documentosOrdenados = [...snapshot.docs].sort(
-                (a, b) => b.data().data.toDate() - a.data().data.toDate()
-            );
-
-            documentosOrdenados.forEach((documento) => {
-                const dados = documento.data();
-                total += dados.valor;
+    // Monta uma linha do histórico (usada na lista curta e na lista completa)
+    function criarItemHistorico(documento) {
+        const dados = documento.data();
 
                 const dataObj = dados.data.toDate();
                 const dataFormatada = dataObj.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -196,6 +187,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 `;
                 if (podeEditar) {
                     item.querySelector(".botao-editar-item").addEventListener("click", async () => {
+                        fundoModalHistorico.classList.remove("aberto");
                         const docGanho = await getDoc(doc(db, "usuarios", uidAtual, "lancamentos", dados.lancamentoParId));
                         const dadosGanho = docGanho.exists() ? docGanho.data() : {};
                         abrirModalRetirada({
@@ -208,8 +200,39 @@ document.addEventListener("DOMContentLoaded", function () {
                         });
                     });
                 }
-                listaGuardado.appendChild(item);
+        return item;
+    }
+
+    function escutarGuardado() {
+        const referencia = collection(db, "usuarios", uidAtual, "lancamentos");
+        // Sem orderBy aqui de propósito: um "where" sozinho não precisa de
+        // índice composto no Firestore. Ordenamos do lado do app mesmo.
+        const consulta = query(referencia, where("categoria", "==", "Guardar Dinheiro"));
+
+        onSnapshot(consulta, (snapshot) => {
+            let total = 0;
+            listaGuardado.innerHTML = "";
+            guardadoVazio.hidden = snapshot.docs.length > 0;
+
+            const documentosOrdenados = [...snapshot.docs].sort(
+                (a, b) => b.data().data.toDate() - a.data().data.toDate()
+            );
+
+            documentosOrdenados.forEach((documento) => { total += documento.data().valor; });
+
+            // O histórico mostra só os 4 mais recentes; o resto fica atrás do
+            // botão "Ver histórico completo"
+            const LIMITE_HISTORICO = 4;
+            documentosOrdenados.slice(0, LIMITE_HISTORICO).forEach((documento) => {
+                listaGuardado.appendChild(criarItemHistorico(documento));
             });
+            listaGuardadoCompleta.innerHTML = "";
+            documentosOrdenados.forEach((documento) => {
+                listaGuardadoCompleta.appendChild(criarItemHistorico(documento));
+            });
+            const sobram = documentosOrdenados.length - LIMITE_HISTORICO;
+            botaoVerTudoGuardado.hidden = sobram <= 0;
+            botaoVerTudoGuardado.textContent = `Ver histórico completo (${documentosOrdenados.length})`;
 
             totalHistorico = total;
             aplicarTotal();
@@ -219,7 +242,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    listaGuardado.addEventListener("click", async (evento) => {
+    async function aoClicarNoHistorico(evento) {
         const botao = evento.target.closest(".botao-excluir");
         if (!botao) return;
 
@@ -259,7 +282,9 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!confirmou) return;
 
         await deleteDoc(doc(db, "usuarios", uidAtual, "lancamentos", botao.dataset.id));
-    });
+    }
+    listaGuardado.addEventListener("click", aoClicarNoHistorico);
+    listaGuardadoCompleta.addEventListener("click", aoClicarNoHistorico);
 
     // ==========================================================================
     // METAS — uma barra de progresso por meta
@@ -305,7 +330,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             const item = document.createElement("li");
-            item.className = "item-conta";
+            item.className = "item-conta card-meta";
             item.style.flexDirection = "column";
             item.style.alignItems = "stretch";
             item.innerHTML = `

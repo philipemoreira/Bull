@@ -109,7 +109,7 @@
                         <span class="rotulo-item-resumo">Gastos</span>
                         <span class="valor-item-resumo valor-item-gasto" id="total-gastos">R$ 0,00</span>
                     </div>
-                    <div class="item-resumo-saldo" id="item-repasses" hidden>
+                    <div class="item-resumo-saldo" id="item-repasses" hidden style="cursor:pointer" role="button" tabindex="0" title="Toque para ver o que compõe os Repasses">
                         <span class="rotulo-item-resumo">Repasses</span>
                         <span class="valor-item-resumo valor-item-repasse" id="total-repasses">R$ 0,00</span>
                     </div>
@@ -211,10 +211,11 @@
 
             <div class="etapa-escolha" id="etapa-escolha">
                 <p class="pergunta-escolha" id="pergunta-escolha">Deseja registrar um:</p>
-                <div class="botoes-escolha">
+                <div class="botoes-escolha botoes-escolha-4">
                     <button type="button" class="botao-escolha-tipo escolha-gasto" data-tipo="gasto">Gasto</button>
                     <button type="button" class="botao-escolha-tipo escolha-ganho" id="botao-escolha-extra" data-tipo="extra">Extra</button>
                     <button type="button" class="botao-escolha-tipo escolha-guardar" data-tipo="guardar">Guardar</button>
+                    <button type="button" class="botao-escolha-tipo escolha-transferir" data-tipo="transferir">Transferir</button>
                 </div>
             </div>
 
@@ -543,6 +544,58 @@
             <button type="button" class="botao-enviar" id="botao-confirmar-banco-salario">
                 <span class="texto-botao">Confirmar recebimento</span>
             </button>
+        </div>
+    </div>
+
+    <div class="fundo-modal" id="fundo-modal-transferir">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Transferir entre bancos</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-transferir" aria-label="Fechar">✕</button>
+            </div>
+            <p class="texto-explicativo-guardado">O dinheiro só muda de banco. Não conta como ganho nem como gasto e não aparece no gráfico.</p>
+            <form id="formulario-transferir">
+                <div class="campo">
+                    <label for="campo-valor-transferir">Valor</label>
+                    <div class="valor-wrapper">
+                        <span class="prefixo-valor">R$</span>
+                        <input type="text" inputmode="decimal" id="campo-valor-transferir" placeholder="0,00" required>
+                    </div>
+                </div>
+                <div class="campo">
+                    <label for="campo-origem-transferir">De qual banco sai</label>
+                    <select id="campo-origem-transferir" required></select>
+                    <p class="dica-campo" id="dica-saldo-origem-transferir" style="margin-top: 6px;"></p>
+                </div>
+                <div class="campo">
+                    <label for="campo-destino-transferir">Para qual banco vai</label>
+                    <select id="campo-destino-transferir" required></select>
+                </div>
+                <div class="campo">
+                    <label for="campo-descricao-transferir">Descrição (opcional)</label>
+                    <input type="text" id="campo-descricao-transferir" placeholder="Ex: Mandei para investir">
+                </div>
+                <div class="campo">
+                    <label for="campo-data-transferir">Data</label>
+                    <input type="date" id="campo-data-transferir" required>
+                </div>
+                <div class="mensagem-aviso" id="mensagem-aviso-transferir" role="alert"></div>
+                <button type="submit" class="botao-enviar" id="botao-salvar-transferir">
+                    <span class="texto-botao">Transferir</span>
+                    <span class="spinner-botao" hidden></span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="fundo-modal" id="fundo-modal-detalhe-repasses">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>O que compõe os Repasses</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-detalhe-repasses" aria-label="Fechar">✕</button>
+            </div>
+            <p class="texto-explicativo-guardado" id="resumo-detalhe-repasses"></p>
+            <div id="lista-detalhe-repasses"></div>
         </div>
     </div>
 

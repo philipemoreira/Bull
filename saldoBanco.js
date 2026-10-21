@@ -9,6 +9,7 @@
 //       − faturas de cartão pagas por esse banco
 //       ± Guardar/Retirar (transferência: o campo "banco" já leva o sinal)
 //       − o que saiu desse banco pra ser guardado em outro (bancoOrigem)
+//       ± transferência entre bancos (tipo "transferencia": sai da origem, entra no destino)
 // Lançamentos marcados "ajuste" (Ajuste do guardado) NÃO mexem no saldo:
 // o gasto original já tinha descontado o dinheiro do banco.
 // ==========================================================================
@@ -16,6 +17,13 @@ export function calcularSaldoBanco(nomeBanco, saldoInicial, lancamentos) {
     let total = saldoInicial || 0;
     lancamentos.forEach((item) => {
         const dados = typeof item.data === "function" ? item.data() : item;
+        // Transferência entre bancos: uma só ponta no banco de origem (sai)
+        // e outra no de destino (entra); não é ganho nem gasto
+        if (dados.tipo === "transferencia") {
+            if (dados.bancoOrigem === nomeBanco) total -= dados.valor;
+            if (dados.banco === nomeBanco) total += dados.valor;
+            return;
+        }
         const ehCategoriaEspecial = dados.categoria === "Guardar Dinheiro" || dados.categoria === "Retirada da Reserva";
 
         if (dados.tipo === "ganho" && !ehCategoriaEspecial && dados.banco === nomeBanco) {

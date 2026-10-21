@@ -59,8 +59,8 @@
                 </div>
             </section>
 
-            <p class="texto-explicativo-guardado">
-                Esse valor não entra no saldo da tela inicial — é dinheiro que você separou de propósito, guardado à parte.
+            <p class="guardado-nota">
+                Esse valor não entra no saldo da tela inicial: é dinheiro que você separou de propósito.
             </p>
 
             <!-- ========================================================== -->
@@ -86,9 +86,12 @@
                 </div>
             </a>
 
-            <h3 class="titulo-secao" style="margin: 28px 0 14px 0;">Histórico</h3>
+            <div class="cabecalho-lista-lembretes" style="margin-top: 28px;">
+                <h3 class="titulo-secao" style="margin:0;">Últimos movimentos</h3>
+            </div>
             <ul class="lista-lancamentos" id="lista-guardado"></ul>
             <p class="lista-vazia" id="guardado-vazio" hidden>Você ainda não guardou nenhum valor.</p>
+            <button type="button" class="botao-ver-tudo-guardado" id="botao-ver-tudo-guardado" hidden>Ver histórico completo</button>
         </main>
 
         <nav class="nav-inferior" id="nav-inferior">
@@ -109,6 +112,16 @@
                 <span>Mais</span>
             </a>
         </nav>
+    </div>
+
+    <div class="fundo-modal" id="fundo-modal-historico">
+        <div class="modal-lancamento">
+            <div class="cabecalho-modal">
+                <h3>Histórico completo</h3>
+                <button class="botao-fechar-modal" id="botao-fechar-historico" aria-label="Fechar">✕</button>
+            </div>
+            <ul class="lista-lancamentos lista-historico-completa" id="lista-guardado-completa"></ul>
+        </div>
     </div>
 
     <div class="fundo-modal" id="fundo-modal-cofrinho">

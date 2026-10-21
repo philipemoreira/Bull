@@ -221,3 +221,63 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* ==========================================================================
+   Página Guardado — notas, metas e histórico enxuto
+   ========================================================================== */
+.guardado-nota {
+    margin: 12px 4px 4px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.card-meta {
+    border: 1px solid var(--borda);
+    border-radius: 14px;
+    padding: 14px 16px;
+    background-color: var(--surface);
+}
+
+.card-meta .nome-conta {
+    font-size: 15.5px;
+    font-weight: 700;
+}
+
+.card-meta .barra-orcamento-wrapper {
+    height: 8px;
+    border-radius: 999px;
+}
+
+.card-meta .barra-orcamento-preenchida {
+    border-radius: 999px;
+}
+
+.botao-ver-tudo-guardado {
+    display: block;
+    width: 100%;
+    margin: 12px 0 4px;
+    padding: 13px 16px;
+    border: 1px solid var(--borda);
+    border-radius: 12px;
+    background-color: var(--surface-alta);
+    color: var(--text-primary);
+    font-family: var(--fonte-corpo);
+    font-size: 14.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.botao-ver-tudo-guardado:hover {
+    border-color: #60A5FA;
+    color: #60A5FA;
+}
+
+.lista-historico-completa {
+    max-height: 62vh;
+    overflow-y: auto;
+    margin-top: 6px;
+    padding-right: 2px;
+}

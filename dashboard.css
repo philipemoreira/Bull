@@ -981,6 +981,16 @@ body {
     color: #60A5FA;
 }
 
+.botao-escolha-tipo.escolha-transferir:hover {
+    border-color: #A78BFA;
+    color: #A78BFA;
+}
+
+.item-lancamento.tipo-transferencia .ponto-categoria,
+.item-lancamento.tipo-transferencia .valor-lancamento {
+    color: #A78BFA;
+}
+
 .botao-escolha-tipo.escolha-cartao:hover {
     border-color: #A78BFA;
     color: #A78BFA;
