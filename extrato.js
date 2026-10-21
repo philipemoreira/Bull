@@ -1,5 +1,6 @@
 import { formatarMoeda, paraNumero } from "./util.js";
 import { escaparHtml } from "./texto.js";
+import { confirmarComTelinha, mostrarToastComAcao } from "./avisos.js";
 import { excluirOutraParte } from "./divisao.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -53,27 +54,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoCancelarAcao = document.getElementById("botao-cancelar-acao");
     const botaoFecharConfirmar = document.getElementById("botao-fechar-confirmar");
 
-    // Substitui o confirm() feio do navegador por uma telinha nas cores do app
-    function confirmarComTelinha(mensagem, titulo = "Confirmar") {
-        return new Promise((resolve) => {
-            tituloModalConfirmar.textContent = titulo;
-            textoModalConfirmar.textContent = mensagem;
-            fundoModalConfirmar.classList.add("aberto");
-
-            function limpar() {
-                fundoModalConfirmar.classList.remove("aberto");
-                botaoConfirmarAcao.removeEventListener("click", aoConfirmar);
-                botaoCancelarAcao.removeEventListener("click", aoCancelar);
-                botaoFecharConfirmar.removeEventListener("click", aoCancelar);
-            }
-            function aoConfirmar() { limpar(); resolve(true); }
-            function aoCancelar() { limpar(); resolve(false); }
-
-            botaoConfirmarAcao.addEventListener("click", aoConfirmar);
-            botaoCancelarAcao.addEventListener("click", aoCancelar);
-            botaoFecharConfirmar.addEventListener("click", aoCancelar);
-        });
-    }
     const extratoVazio = document.getElementById("extrato-vazio");
     const filtroMes = document.getElementById("filtro-mes");
     const filtroValor = document.getElementById("filtro-valor");
@@ -280,21 +260,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    let timeoutToast = null;
 
-    function mostrarToastComAcao(mensagem, textoBotao, aoClicar, duracaoMs = 5000) {
-        if (timeoutToast) clearTimeout(timeoutToast);
-        toastMensagem.textContent = mensagem;
-        toastBotaoAcao.textContent = textoBotao;
-        toastBotaoAcao.hidden = false;
-        toastBotaoAcao.onclick = () => {
-            clearTimeout(timeoutToast);
-            toast.hidden = true;
-            aoClicar();
-        };
-        toast.hidden = false;
-        timeoutToast = setTimeout(() => { toast.hidden = true; }, duracaoMs);
-    }
 
     listaExtrato.addEventListener("click", async (evento) => {
         const botao = evento.target.closest(".botao-excluir");

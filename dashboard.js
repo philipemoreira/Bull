@@ -3,6 +3,10 @@ import { formatarMoeda, paraNumero, aplicarMascaraValor, mesReferenciaString, da
 import { escaparHtml } from "./texto.js";
 import { reajustarParcelas } from "./parcelas.js";
 import { excluirOutraParte } from "./divisao.js";
+import { iniciarTransferencia } from "./transferencia.js";
+import { iniciarDetalheRepasses } from "./repasses.js";
+import { confirmarComTelinha, mostrarToast, mostrarToastComAcao } from "./avisos.js";
+import { formatarDataParaCampo, construirDataComHorarioReal, calcularMesReferenciaFatura } from "./datas.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -85,9 +89,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const mensagemAvisoEditarCategoria = document.getElementById("mensagem-aviso-editar-categoria");
     const botaoSalvarEditarCategoria = document.getElementById("botao-salvar-editar-categoria");
     const spinnerEditarCategoria = botaoSalvarEditarCategoria.querySelector(".spinner-botao");
-    const toast = document.getElementById("toast");
-    const toastMensagem = document.getElementById("toast-mensagem");
-    const toastBotaoAcao = document.getElementById("toast-botao-acao");
     const fundoModalEditarPix = document.getElementById("fundo-modal-editar-pix");
     const botaoFecharEditarPix = document.getElementById("botao-fechar-editar-pix");
     const textoEditarPixContexto = document.getElementById("texto-editar-pix-contexto");
@@ -104,12 +105,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const mensagemAvisoEditarFormaPagamento = document.getElementById("mensagem-aviso-editar-forma-pagamento");
     const botaoSalvarEditarFormaPagamento = document.getElementById("botao-salvar-editar-forma-pagamento");
 
-    const fundoModalConfirmar = document.getElementById("fundo-modal-confirmar");
-    const tituloModalConfirmar = document.getElementById("titulo-modal-confirmar");
-    const textoModalConfirmar = document.getElementById("texto-modal-confirmar");
-    const botaoConfirmarAcao = document.getElementById("botao-confirmar-acao");
-    const botaoCancelarAcao = document.getElementById("botao-cancelar-acao");
-    const botaoFecharConfirmar = document.getElementById("botao-fechar-confirmar");
     const fundoModalExcluirPendencia = document.getElementById("fundo-modal-excluir-pendencia");
     const botaoFecharExcluirPendencia = document.getElementById("botao-fechar-excluir-pendencia");
     const etapaEscopoExclusao = document.getElementById("etapa-escopo-exclusao");
@@ -201,32 +196,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // ==========================================================================
     // 2. ESTADO DA TELA
-    // ==========================================================================
-    // TELINHA DE CONFIRMAÇÃO GENÉRICA — substitui o confirm() feio do
-    // navegador por uma telinha nas cores do app, em qualquer lugar do
-    // dashboard que precise perguntar "tem certeza?"
-    // ==========================================================================
-    function confirmarComTelinha(mensagem, titulo = "Confirmar") {
-        return new Promise((resolve) => {
-            tituloModalConfirmar.textContent = titulo;
-            textoModalConfirmar.textContent = mensagem;
-            fundoModalConfirmar.classList.add("aberto");
-
-            function limpar() {
-                fundoModalConfirmar.classList.remove("aberto");
-                botaoConfirmarAcao.removeEventListener("click", aoConfirmar);
-                botaoCancelarAcao.removeEventListener("click", aoCancelar);
-                botaoFecharConfirmar.removeEventListener("click", aoCancelar);
-            }
-            function aoConfirmar() { limpar(); resolve(true); }
-            function aoCancelar() { limpar(); resolve(false); }
-
-            botaoConfirmarAcao.addEventListener("click", aoConfirmar);
-            botaoCancelarAcao.addEventListener("click", aoCancelar);
-            botaoFecharConfirmar.addEventListener("click", aoCancelar);
-        });
-    }
-
     let uidAtual = null;
     let mesSelecionado = new Date();
     let tipoSelecionado = "gasto";
@@ -696,37 +665,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // ==========================================================================
-    // TOAST — mensagens rápidas no rodapé da tela
-    // ==========================================================================
-    let timeoutToast = null;
-
-    // Mensagem simples, some sozinha (ex: "Lançamento salvo ✓")
-    function mostrarToast(mensagem, duracaoMs = 2200) {
-        if (timeoutToast) clearTimeout(timeoutToast);
-        toastMensagem.textContent = mensagem;
-        toastBotaoAcao.hidden = true;
-        toastBotaoAcao.onclick = null;
-        toast.hidden = false;
-        timeoutToast = setTimeout(() => { toast.hidden = true; }, duracaoMs);
-    }
-
-    // Mensagem com um botão de ação (ex: "Excluído. Desfazer?") — a ação só
-    // continua disponível enquanto o toast estiver na tela
-    function mostrarToastComAcao(mensagem, textoBotao, aoClicar, duracaoMs = 5000) {
-        if (timeoutToast) clearTimeout(timeoutToast);
-        toastMensagem.textContent = mensagem;
-        toastBotaoAcao.textContent = textoBotao;
-        toastBotaoAcao.hidden = false;
-        toastBotaoAcao.onclick = () => {
-            clearTimeout(timeoutToast);
-            toast.hidden = true;
-            aoClicar();
-        };
-        toast.hidden = false;
-        timeoutToast = setTimeout(() => { toast.hidden = true; }, duracaoMs);
-    }
-
-    // ==========================================================================
     // 6. CATEGORIAS
     // ==========================================================================
     async function carregarCategoriasCustomizadas() {
@@ -754,34 +692,11 @@ document.addEventListener("DOMContentLoaded", function () {
             .some((c) => c.nome === nomeCategoria && c.foraDosTotais);
     }
 
-    // Toque na linha "Repasses": lista o que está somando ali
-    (function ligarDetalheRepasses() {
-        const fundo = document.getElementById("fundo-modal-detalhe-repasses");
-        const lista = document.getElementById("lista-detalhe-repasses");
-        const resumo = document.getElementById("resumo-detalhe-repasses");
-        function abrir() {
-            const itens = (ultimosDocumentosDoMes || [])
-                .map((d) => d.data())
-                .filter((d) => ehForaDosTotais(d.categoria));
-            lista.innerHTML = "";
-            let total = 0;
-            itens.forEach((d) => {
-                const entrada = d.tipo === "ganho";
-                total += entrada ? d.valor : -d.valor;
-                const linha = document.createElement("div");
-                linha.style.cssText = "display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--borda)";
-                linha.innerHTML = `<span>${escaparHtml(d.categoria)}${d.descricao ? " · " + escaparHtml(d.descricao) : ""}<br><small>${entrada ? "Entrou" : "Saiu"}</small></span><strong>${entrada ? "+" : "−"} ${formatarMoeda(d.valor)}</strong>`;
-                lista.appendChild(linha);
-            });
-            resumo.textContent = itens.length === 0
-                ? "Nenhum lançamento de repasse neste mês."
-                : `Entrou − saiu = ${formatarMoeda(total)}. Se um item aqui não era de repasse, a categoria dele está marcada como "Repasse ou acerto".`;
-            fundo.classList.add("aberto");
-        }
-        document.getElementById("item-repasses").addEventListener("click", abrir);
-        document.getElementById("botao-fechar-detalhe-repasses").addEventListener("click", () => fundo.classList.remove("aberto"));
-        fundo.addEventListener("click", (e) => { if (e.target === fundo) fundo.classList.remove("aberto"); });
-    })();
+    // Toque na linha "Repasses": a lógica vive em repasses.js
+    iniciarDetalheRepasses({
+        documentosDoMes: () => ultimosDocumentosDoMes,
+        ehForaDosTotais: (nome) => ehForaDosTotais(nome)
+    });
 
     function refazerTotaisEGrafico() {
         if (!ultimosDocumentosDoMes) return;
@@ -1578,111 +1493,12 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    // ==========================================================================
-    // TRANSFERIR ENTRE BANCOS — um único lançamento (tipo "transferencia"):
-    // sai do banco de origem e entra no de destino
-    // ==========================================================================
-    const fundoModalTransferir = document.getElementById("fundo-modal-transferir");
-    const formularioTransferir = document.getElementById("formulario-transferir");
-    const campoValorTransferir = document.getElementById("campo-valor-transferir");
-    const campoOrigemTransferir = document.getElementById("campo-origem-transferir");
-    const campoDestinoTransferir = document.getElementById("campo-destino-transferir");
-    const campoDescricaoTransferir = document.getElementById("campo-descricao-transferir");
-    const campoDataTransferir = document.getElementById("campo-data-transferir");
-    const avisoTransferir = document.getElementById("mensagem-aviso-transferir");
-    const botaoSalvarTransferir = document.getElementById("botao-salvar-transferir");
-    const dicaSaldoOrigemTransferir = document.getElementById("dica-saldo-origem-transferir");
-    aplicarMascaraValor(campoValorTransferir);
-
-    function avisoDeTransferencia(texto) {
-        avisoTransferir.textContent = texto;
-        avisoTransferir.classList.toggle("visivel", !!texto);
-    }
-
-    async function mostrarSaldoDaOrigem() {
-        dicaSaldoOrigemTransferir.textContent = "";
-        const nome = campoOrigemTransferir.value;
-        const banco = bancosCustomizados.find((b) => b.nome === nome);
-        if (!banco) return;
-        try {
-            const snap = await getDoc(doc(db, "usuarios", uidAtual, "bancos", banco.id));
-            const saldoInicial = snap.exists() ? (snap.data().saldoInicial || 0) : 0;
-            const saldo = await calcularSaldoBancoAgora(nome, saldoInicial);
-            if (campoOrigemTransferir.value === nome) dicaSaldoOrigemTransferir.textContent = `Saldo agora: ${formatarMoeda(saldo)}`;
-        } catch (erro) { /* só não mostra o saldo */ }
-    }
-
-    function abrirModalTransferir() {
-        avisoDeTransferencia("");
-        if (bancosCustomizados.length < 2) {
-            mostrarToast("Cadastre pelo menos 2 bancos em Bancos e Cartões para transferir.", 3600);
-            return;
-        }
-        formularioTransferir.reset();
-        [campoOrigemTransferir, campoDestinoTransferir].forEach((select) => {
-            select.innerHTML = "";
-            bancosCustomizados.forEach((banco) => {
-                const opcao = document.createElement("option");
-                opcao.value = banco.nome;
-                opcao.textContent = banco.nome;
-                select.appendChild(opcao);
-            });
-        });
-        campoDestinoTransferir.selectedIndex = 1;
-        campoDataTransferir.value = formatarDataParaCampo(new Date());
-        fundoModalTransferir.classList.add("aberto");
-        mostrarSaldoDaOrigem();
-        campoValorTransferir.focus();
-    }
-
-    function fecharModalTransferir() {
-        fundoModalTransferir.classList.remove("aberto");
-    }
-
-    campoOrigemTransferir.addEventListener("change", mostrarSaldoDaOrigem);
-    document.getElementById("botao-fechar-transferir").addEventListener("click", fecharModalTransferir);
-    fundoModalTransferir.addEventListener("click", (evento) => {
-        if (evento.target === fundoModalTransferir) fecharModalTransferir();
-    });
-
-    formularioTransferir.addEventListener("submit", async (evento) => {
-        evento.preventDefault();
-        avisoDeTransferencia("");
-        const valor = paraNumero(campoValorTransferir.value);
-        const origem = campoOrigemTransferir.value;
-        const destino = campoDestinoTransferir.value;
-        if (!valor || valor <= 0) { avisoDeTransferencia("Digita um valor maior que zero."); return; }
-        if (!origem || !destino) { avisoDeTransferencia("Escolhe os dois bancos."); return; }
-        if (origem === destino) { avisoDeTransferencia("O banco de origem e o de destino precisam ser diferentes."); return; }
-
-        botaoSalvarTransferir.disabled = true;
-        try {
-            const bancoOrigem = bancosCustomizados.find((b) => b.nome === origem);
-            const snap = bancoOrigem ? await getDoc(doc(db, "usuarios", uidAtual, "bancos", bancoOrigem.id)) : null;
-            const saldoInicial = snap && snap.exists() ? (snap.data().saldoInicial || 0) : 0;
-            const saldoOrigem = await calcularSaldoBancoAgora(origem, saldoInicial);
-            if (Math.round(valor * 100) > Math.round(saldoOrigem * 100)) {
-                avisoDeTransferencia(`O ${origem} só tem ${formatarMoeda(saldoOrigem)}. Não dá para transferir mais do que isso.`);
-                return;
-            }
-            await addDoc(collection(db, "usuarios", uidAtual, "lancamentos"), {
-                tipo: "transferencia",
-                valor,
-                categoria: "Transferência",
-                descricao: campoDescricaoTransferir.value.trim(),
-                banco: destino,
-                bancoOrigem: origem,
-                data: Timestamp.fromDate(construirDataComHorarioReal(campoDataTransferir.value)),
-                mesReferencia: mesReferenciaString(mesSelecionado),
-                criadoEm: serverTimestamp()
-            });
-            fecharModalTransferir();
-            mostrarToast(`Transferido ✓ ${origem} → ${destino}`);
-        } catch (erro) {
-            avisoDeTransferencia("Não deu pra salvar agora. Confere sua internet e tenta de novo.");
-        } finally {
-            botaoSalvarTransferir.disabled = false;
-        }
+    // Transferir entre bancos: a lógica vive em transferencia.js
+    const transferencia = iniciarTransferencia({
+        uid: () => uidAtual,
+        bancos: () => bancosCustomizados,
+        mes: () => mesSelecionado,
+        saldoDoBanco: (nome, saldoInicial) => calcularSaldoBancoAgora(nome, saldoInicial)
     });
 
     function irParaFormulario(tipoClicado) {
@@ -1778,26 +1594,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // horário LOCAL do aparelho (evita o bug clássico de virar o dia errado
     // perto da meia-noite, que aconteceria usando toISOString diretamente
     // em fusos negativos como o do Brasil)
-    function formatarDataParaCampo(data) {
-        const ano = data.getFullYear();
-        const mes = String(data.getMonth() + 1).padStart(2, "0");
-        const dia = String(data.getDate()).padStart(2, "0");
-        return `${ano}-${mes}-${dia}`;
-    }
 
 
-    // Calcula em qual fatura (mês) uma compra feita HOJE deveria cair,
-    // dado o dia de fechamento do cartão escolhido: antes do fechamento,
-    // entra na fatura que ainda vai fechar esse mês; no dia do fechamento
-    // (inclusive) ou depois, já pula pra fatura do mês seguinte (igual ao Nubank:
-    // no dia do fechamento é o "melhor dia pra compras")
-    function calcularMesReferenciaFatura(hoje, diaFechamento) {
-        if (hoje.getDate() < diaFechamento) {
-            return mesReferenciaString(hoje);
-        }
-        const proximoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
-        return mesReferenciaString(proximoMes);
-    }
 
 
 
@@ -1815,7 +1613,7 @@ document.addEventListener("DOMContentLoaded", function () {
         botao.addEventListener("click", () => {
             if (botao.dataset.tipo === "transferir") {
                 fecharModal();
-                abrirModalTransferir();
+                transferencia.abrir();
                 return;
             }
             irParaFormulario(botao.dataset.tipo);
@@ -2030,11 +1828,6 @@ document.addEventListener("DOMContentLoaded", function () {
     // certinho (do mais recente pro mais antigo), com precisão até o
     // milissegundo — sem isso, dois lançamentos no mesmo minuto "empatavam"
     // e a ordem entre eles ficava meio aleatória
-    function construirDataComHorarioReal(dataDoCampo) {
-        const agora = new Date();
-        const [ano, mes, dia] = dataDoCampo.split("-").map(Number);
-        return new Date(ano, mes - 1, dia, agora.getHours(), agora.getMinutes(), agora.getSeconds(), agora.getMilliseconds());
-    }
 
     // ==========================================================================
     // 9. SALVAR (criar novo, ou editar um existente)

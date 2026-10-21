@@ -6,7 +6,7 @@
 // dos arquivos principais.
 // ==========================================================================
 
-const NOME_DO_CACHE = "financas-familia-v193";
+const NOME_DO_CACHE = "financas-familia-v194";
 
 // Arquivos essenciais, guardados localmente no primeiro acesso
 const ARQUIVOS_ESSENCIAIS = [
@@ -34,6 +34,10 @@ const ARQUIVOS_ESSENCIAIS = [
     "texto.js",
     "parcelas.js",
     "divisao.js",
+    "avisos.js",
+    "datas.js",
+    "transferencia.js",
+    "repasses.js",
     "util.js",
     "saldoBanco.js",
     "cartaoNoExtrato.js",

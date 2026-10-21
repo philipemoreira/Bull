@@ -1,6 +1,7 @@
 import { calcularSaldoBanco } from "./saldoBanco.js";
 import { formatarMoeda, paraNumero, aplicarMascaraValor, mesReferenciaString } from "./util.js";
 import { escaparHtml } from "./texto.js";
+import { confirmarComTelinha } from "./avisos.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -94,27 +95,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const botaoCancelarAcao = document.getElementById("botao-cancelar-acao");
     const botaoFecharConfirmar = document.getElementById("botao-fechar-confirmar");
 
-    // Substitui o confirm() feio do navegador por uma telinha nas cores do app
-    function confirmarComTelinha(mensagem, titulo = "Confirmar") {
-        return new Promise((resolve) => {
-            tituloModalConfirmar.textContent = titulo;
-            textoModalConfirmar.textContent = mensagem;
-            fundoModalConfirmar.classList.add("aberto");
-
-            function limpar() {
-                fundoModalConfirmar.classList.remove("aberto");
-                botaoConfirmarAcao.removeEventListener("click", aoConfirmar);
-                botaoCancelarAcao.removeEventListener("click", aoCancelar);
-                botaoFecharConfirmar.removeEventListener("click", aoCancelar);
-            }
-            function aoConfirmar() { limpar(); resolve(true); }
-            function aoCancelar() { limpar(); resolve(false); }
-
-            botaoConfirmarAcao.addEventListener("click", aoConfirmar);
-            botaoCancelarAcao.addEventListener("click", aoCancelar);
-            botaoFecharConfirmar.addEventListener("click", aoCancelar);
-        });
-    }
 
     let uidAtual = null;
 

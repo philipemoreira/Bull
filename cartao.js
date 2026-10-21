@@ -1,6 +1,7 @@
 import { calcularSaldoBanco } from "./saldoBanco.js";
 import { formatarMoeda, paraNumero, aplicarMascaraValor, mesReferenciaString, dataDeFechamento, faturaJaFechou } from "./util.js";
 import { escaparHtml } from "./texto.js";
+import { confirmarComTelinha, mostrarToast } from "./avisos.js";
 import { reajustarParcelas } from "./parcelas.js";
 import { excluirOutraParte } from "./divisao.js";
 import { auth, db } from "./firebase-config.js";
@@ -103,38 +104,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const cartoesComDetalheAberto = new Set(); // quais cartões estão com "ver itens da fatura aberta" expandido
     let bancoRealEmEdicaoId = null;
 
-    // ==========================================================================
-    // TELINHA DE CONFIRMAÇÃO — substitui o confirm() feio do navegador
-    // ==========================================================================
-    function confirmarComTelinha(mensagem, titulo = "Confirmar") {
-        return new Promise((resolve) => {
-            tituloModalConfirmar.textContent = titulo;
-            textoModalConfirmar.textContent = mensagem;
-            fundoModalConfirmar.classList.add("aberto");
 
-            function limpar() {
-                fundoModalConfirmar.classList.remove("aberto");
-                botaoConfirmarAcao.removeEventListener("click", aoConfirmar);
-                botaoCancelarAcao.removeEventListener("click", aoCancelar);
-                botaoFecharConfirmar.removeEventListener("click", aoCancelar);
-            }
-            function aoConfirmar() { limpar(); resolve(true); }
-            function aoCancelar() { limpar(); resolve(false); }
-
-            botaoConfirmarAcao.addEventListener("click", aoConfirmar);
-            botaoCancelarAcao.addEventListener("click", aoCancelar);
-            botaoFecharConfirmar.addEventListener("click", aoCancelar);
-        });
-    }
-
-    let timeoutToast = null;
-    function mostrarToast(mensagem, duracaoMs = 2200) {
-        if (timeoutToast) clearTimeout(timeoutToast);
-        toastMensagem.textContent = mensagem;
-        toastBotaoAcao.hidden = true;
-        toast.hidden = false;
-        timeoutToast = setTimeout(() => { toast.hidden = true; }, duracaoMs);
-    }
 
 
 
